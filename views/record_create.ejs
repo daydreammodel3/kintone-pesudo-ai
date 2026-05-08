@@ -1,0 +1,38 @@
+<%- include('partials/header', { title }) %>
+
+<section class="panel">
+  <h1>POSTによる1件登録</h1>
+  <% if (!apps.length) { %>
+    <p class="hint">先に「kintoneアプリ管理」で共通アプリを登録してください。</p>
+  <% } %>
+  <p class="hint">POST対象フィールドごとにテキスト入力し、サーバー側でkintoneのrecord JSONを自動生成します。</p>
+
+  <form method="get" action="/records/new" class="form-grid wide">
+    <label>表示対象のkintoneアプリ
+      <select name="appId" onchange="this.form.submit()" required>
+        <% apps.forEach((app) => { %>
+          <option value="<%= app.id %>" <%= selectedApp && selectedApp.id === app.id ? 'selected' : '' %>>
+            <%= app.app_name %> (<%= app.kintone_domain %> / appId: <%= app.kintone_app_id %>)
+          </option>
+        <% }) %>
+      </select>
+    </label>
+    <noscript><button type="submit">切り替え</button></noscript>
+  </form>
+
+  <form method="post" action="/records" class="form-grid wide">
+    <input type="hidden" name="managedAppId" value="<%= selectedApp ? selectedApp.id : '' %>" />
+    <% if (postFields && postFields.length) { %>
+      <% postFields.forEach((field) => { %>
+        <label><%= field.field_name %>（<%= field.field_code %> / <%= field.field_type %>）
+          <input type="text" name="field_<%= field.id %>" placeholder="値を入力（配列/オブジェクトはJSON入力可）" />
+        </label>
+      <% }) %>
+    <% } else { %>
+      <p class="hint">選択中アプリにPOST対象フィールドがありません。kintoneアプリ管理で設定してください。</p>
+    <% } %>
+    <button type="submit" <%= (!apps.length || !postFields.length) ? 'disabled' : '' %>>登録する</button>
+  </form>
+</section>
+
+<%- include('partials/footer') %>

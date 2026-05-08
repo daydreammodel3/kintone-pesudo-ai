@@ -1,0 +1,36 @@
+<%- include('partials/header', { title }) %>
+
+<section class="panel">
+  <h1>ダッシュボード</h1>
+  <p>ログインユーザー: <strong><%= currentUser %></strong></p>
+  <p>共通kintoneアプリ登録数: <strong><%= appCount %></strong></p>
+  <div class="quick-links">
+    <a class="card" href="/apps/manage">アクセス先kintoneアプリ管理</a>
+    <a class="card" href="/tokens">APIトークン管理</a>
+    <a class="card" href="/records/new">POSTで1件登録</a>
+    <a class="card" href="/records/analyze">GETで一覧取得と分析</a>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>最近の分析ジョブ</h2>
+  <% if (!jobs.length) { %>
+    <p class="hint">まだジョブがありません。</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>ID</th><th>状態</th><th>作成</th><th>更新</th></tr></thead>
+      <tbody>
+        <% jobs.forEach((job) => { %>
+          <tr>
+            <td><%= job.id %></td>
+            <td><%= job.status %></td>
+            <td><%= job.created_at %></td>
+            <td><%= job.updated_at %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</section>
+
+<%- include('partials/footer') %>

@@ -1,0 +1,32 @@
+<%- include('partials/header', { title }) %>
+
+<section class="panel">
+  <h1>ユーザーごとのAPIトークン管理</h1>
+  <p class="hint">保存時は暗号化され、表示時のみ復号化されます。kintoneトークンはアプリごとに保存します。</p>
+  <form method="post" action="/tokens/copilot" class="form-grid wide">
+    <label>GitHub Copilot APIトークン
+      <input type="text" name="copilotApiToken" value="<%= copilotApiToken %>" />
+    </label>
+    <button type="submit">Copilotトークン保存</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>kintone APIトークン（アプリ別）</h2>
+  <% if (!appTokens.length) { %>
+    <p class="hint">共通アプリが未登録です。先に「kintoneアプリ管理」で登録してください。</p>
+  <% } else { %>
+    <% appTokens.forEach((app) => { %>
+      <form method="post" action="/tokens/kintone" class="form-grid wide token-block">
+        <input type="hidden" name="managedAppId" value="<%= app.id %>" />
+        <p><strong><%= app.app_name %></strong> (<%= app.kintone_domain %> / appId: <%= app.kintone_app_id %>)</p>
+        <label>kintone APIトークン
+          <input type="text" name="kintoneApiToken" value="<%= app.userKintoneToken %>" />
+        </label>
+        <button type="submit">このアプリのトークン保存</button>
+      </form>
+    <% }) %>
+  <% } %>
+</section>
+
+<%- include('partials/footer') %>

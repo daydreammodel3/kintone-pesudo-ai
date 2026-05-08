@@ -1,0 +1,53 @@
+<%- include('partials/header', { title }) %>
+
+<section class="panel">
+  <h1>GETによる一覧取得と分析</h1>
+  <% if (!apps.length) { %>
+    <p class="hint">先に「kintoneアプリ管理」で共通アプリを登録してください。</p>
+  <% } %>
+  <form method="post" action="/analysis/start" class="form-grid wide">
+    <label>対象kintoneアプリ
+      <select name="managedAppId" required>
+        <% apps.forEach((app) => { %>
+          <option value="<%= app.id %>" <%= selectedApp && selectedApp.id === app.id ? 'selected' : '' %>>
+            <%= app.app_name %> (<%= app.kintone_domain %> / appId: <%= app.kintone_app_id %>)
+          </option>
+        <% }) %>
+      </select>
+    </label>
+    <% if (getFields && getFields.length) { %>
+      <p class="hint">GET対象フィールド: <%= getFields.map((f) => `${f.field_name}(${f.field_code}:${f.field_type})`).join(', ') %></p>
+    <% } %>
+    <label>分析条件（自然言語 / 任意）
+      <input type="text" name="query" placeholder="例: 5月1日から5月8日までのアラートで優先度高を分析して" />
+    </label>
+    <button type="submit" <%= !apps.length ? 'disabled' : '' %>>分析ジョブ開始</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>分析ジョブ一覧</h2>
+  <% if (!jobs.length) { %>
+    <p class="hint">ジョブがまだありません。</p>
+  <% } else { %>
+    <ul class="job-list" id="job-list">
+      <% jobs.forEach((job) => { %>
+        <li class="job-item" data-job-id="<%= job.id %>">
+          <div>
+            <strong>#<%= job.id %></strong>
+            <span class="status"><%= job.status %></span>
+          </div>
+          <p class="hint">作成: <%= job.created_at %> / 更新: <%= job.updated_at %></p>
+          <% if (job.error) { %>
+            <pre class="result error"><%= job.error %></pre>
+          <% } else { %>
+            <pre class="result">読み込み中...</pre>
+          <% } %>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+</section>
+
+<script src="/static/js/jobs.js"></script>
+<%- include('partials/footer') %>

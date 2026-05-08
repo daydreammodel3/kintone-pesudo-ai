@@ -1,0 +1,260 @@
+:root {
+  --bg0: #f1f5f1;
+  --bg1: #d8efe1;
+  --ink: #16322a;
+  --muted: #507064;
+  --card: #ffffff;
+  --accent: #145c44;
+  --accent2: #d67a1f;
+  --danger: #9f2d2d;
+  --ok: #236a3e;
+  --border: #d9e3dd;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 10% 10%, #f8fffb 0%, transparent 35%),
+    radial-gradient(circle at 90% 0%, #e9fff4 0%, transparent 25%),
+    linear-gradient(120deg, var(--bg0), var(--bg1));
+  font-family: "Avenir Next", "Hiragino Kaku Gothic ProN", sans-serif;
+  min-height: 100vh;
+}
+
+.bg-shape {
+  position: fixed;
+  top: -80px;
+  right: -120px;
+  width: 320px;
+  height: 320px;
+  background: conic-gradient(from 0.5turn, #8ad3ad, #f9d59c, #8ad3ad);
+  opacity: 0.35;
+  filter: blur(24px);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.site-header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(7px);
+  position: sticky;
+  top: 0;
+}
+
+.site-header .brand {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.site-header nav {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.site-header a {
+  text-decoration: none;
+  color: var(--ink);
+  background: #f5faf8;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+.container {
+  width: min(960px, 94vw);
+  margin: 24px auto;
+  display: grid;
+  gap: 18px;
+}
+
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 8px 20px rgba(0, 40, 20, 0.06);
+  animation: rise 380ms ease;
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.auth-panel {
+  width: min(480px, 96vw);
+  margin: 40px auto;
+}
+
+.form-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.form-grid.wide textarea,
+.form-grid.wide input[type="text"] {
+  width: 100%;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+input,
+textarea,
+select,
+button {
+  font: inherit;
+}
+
+input,
+textarea,
+select {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #fcfffd;
+}
+
+textarea {
+  font-family: "SFMono-Regular", Menlo, monospace;
+}
+
+button {
+  border: 0;
+  background: linear-gradient(135deg, var(--accent), #1f815f);
+  color: #fff;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+button.ghost {
+  background: #f8fffa;
+  color: var(--ink);
+  border: 1px solid var(--border);
+}
+
+.alert {
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.alert.error {
+  background: #ffe9e9;
+  color: var(--danger);
+}
+
+.alert.success {
+  background: #e8fff0;
+  color: var(--ok);
+}
+
+.quick-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.card {
+  border: 1px solid var(--border);
+  background: linear-gradient(145deg, #fbfff8, #eefaf2);
+  padding: 16px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  padding: 8px;
+  font-size: 14px;
+}
+
+.job-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.job-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: #fbfffd;
+}
+
+.status {
+  margin-left: 8px;
+  color: var(--accent2);
+  font-weight: 700;
+}
+
+.result {
+  white-space: pre-wrap;
+  background: #f6faf8;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.result.error {
+  background: #fff1f1;
+  color: var(--danger);
+}
+
+.token-block {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #fbfffd;
+}
+
+@media (max-width: 640px) {
+  .site-header {
+    display: grid;
+    gap: 10px;
+  }
+
+  .site-header nav {
+    gap: 8px;
+  }
+}

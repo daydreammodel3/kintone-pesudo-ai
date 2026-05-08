@@ -1,0 +1,28 @@
+{
+  "name": "kintone-pseudo-ai",
+  "version": "1.0.0",
+  "description": "kintone擬似AI: ユーザー認証、トークン暗号化管理、kintone連携、分析ジョブ",
+  "main": "src/app.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "generate:demo-csv": "node scripts/generate_demo_csv.js",
+    "generate:vague-reports": "node scripts/generate_vague_reports.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.8.1",
+    "connect-sqlite3": "^0.9.16",
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

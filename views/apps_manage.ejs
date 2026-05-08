@@ -1,0 +1,97 @@
+<%- include('partials/header', { title }) %>
+
+<section class="panel">
+  <h1>アクセス先kintoneアプリ管理（全ユーザー共通）</h1>
+  <p class="hint">ここで登録したアプリとフィールド定義を全ユーザーが共通利用します。</p>
+  <form method="post" action="/apps/manage" class="form-grid wide">
+    <label>kintoneドメイン
+      <input type="text" name="kintoneDomain" placeholder="sample.cybozu.com" required />
+    </label>
+    <label>kintoneアプリID
+      <input type="text" name="kintoneAppId" required />
+    </label>
+    <label>アプリ名
+      <input type="text" name="appName" required />
+    </label>
+    <button type="submit">アプリを追加</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>登録済みアプリ</h2>
+  <% if (!apps.length) { %>
+    <p class="hint">まだ登録されていません。</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>ID</th><th>アプリ名</th><th>ドメイン</th><th>アプリID</th><th>操作</th></tr></thead>
+      <tbody>
+        <% apps.forEach((app) => { %>
+          <tr>
+            <td><%= app.id %></td>
+            <td><a href="/apps/manage?appId=<%= app.id %>"><%= app.app_name %></a></td>
+            <td><%= app.kintone_domain %></td>
+            <td><%= app.kintone_app_id %></td>
+            <td>
+              <form method="post" action="/apps/manage/<%= app.id %>/delete" onsubmit="return confirm('このアプリと関連フィールド定義を削除しますか？')">
+                <button type="submit" class="ghost">削除</button>
+              </form>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</section>
+
+<section class="panel">
+  <h2>フィールド定義管理</h2>
+  <% if (!selectedApp) { %>
+    <p class="hint">上のアプリ一覧から対象アプリを選択してください。</p>
+  <% } else { %>
+    <p class="hint">対象アプリ: <strong><%= selectedApp.app_name %></strong>（<%= selectedApp.kintone_domain %> / appId: <%= selectedApp.kintone_app_id %>）</p>
+    <form method="post" action="/apps/manage/<%= selectedApp.id %>/fields" class="form-grid wide">
+      <label>フィールド名
+        <input type="text" name="fieldName" required />
+      </label>
+      <label>フィールド種別
+        <select name="fieldType" required>
+          <% fieldTypes.forEach((type) => { %>
+            <option value="<%= type.code %>"><%= type.code %> / <%= type.label %></option>
+          <% }) %>
+        </select>
+      </label>
+      <label>フィールドコード
+        <input type="text" name="fieldCode" required />
+      </label>
+      <label><input type="checkbox" name="canPost" checked /> POST送信対象</label>
+      <label><input type="checkbox" name="canGet" checked /> GET取得対象</label>
+      <button type="submit">フィールドを追加</button>
+    </form>
+
+    <% if (!fields.length) { %>
+      <p class="hint">フィールド定義はまだありません。</p>
+    <% } else { %>
+      <table>
+        <thead><tr><th>名称</th><th>種別</th><th>コード</th><th>POST</th><th>GET</th><th>操作</th></tr></thead>
+        <tbody>
+          <% fields.forEach((f) => { %>
+            <tr>
+              <td><%= f.field_name %></td>
+              <td><%= f.field_type %></td>
+              <td><%= f.field_code %></td>
+              <td><%= f.can_post ? 'Yes' : 'No' %></td>
+              <td><%= f.can_get ? 'Yes' : 'No' %></td>
+              <td>
+                <form method="post" action="/apps/manage/<%= selectedApp.id %>/fields/<%= f.id %>/delete" onsubmit="return confirm('このフィールド定義を削除しますか？')">
+                  <button type="submit" class="ghost">削除</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  <% } %>
+</section>
+
+<%- include('partials/footer') %>
