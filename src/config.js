@@ -23,5 +23,18 @@ module.exports = {
   encryptionKey: getEncryptionKey(),
   copilotApiBase: process.env.COPILOT_API_BASE || "https://models.inference.ai.azure.com",
   copilotModel: process.env.COPILOT_MODEL || "gpt-4o-mini",
-  copilotTimeoutMs: Number(process.env.COPILOT_TIMEOUT_MS || 45000)
+  copilotTimeoutMs: Number(process.env.COPILOT_TIMEOUT_MS || 45000),
+  geminiModel: process.env.GEMINI_MODEL || "gemini-3.8-flash",
+  geminiTimeoutMs: Number(process.env.GEMINI_TIMEOUT_MS || 120000),
+  // 503(混雑)・429・500系を自動再試行する回数（初回を含む）
+  geminiRetryAttempts: Number(process.env.GEMINI_RETRY_ATTEMPTS || 4),
+  // 再試行しても混雑が続くときに切り替えるモデル。空なら切り替えない
+  geminiFallbackModel: process.env.GEMINI_FALLBACK_MODEL ?? "gemini-3.6-flash",
+  anthropicModel: process.env.ANTHROPIC_MODEL || "claude-opus-5",
+  // low | medium | high | xhigh | max（未指定ならモデルのデフォルト）
+  anthropicEffort: process.env.ANTHROPIC_EFFORT || "",
+  // "default" でサーバー側のrefusalフォールバックを有効化。"off" で無効化
+  anthropicFallbacks: process.env.ANTHROPIC_FALLBACKS || "default",
+  anthropicTimeoutMs: Number(process.env.ANTHROPIC_TIMEOUT_MS || 120000),
+  aiMaxToolSteps: Number(process.env.AI_MAX_TOOL_STEPS || 8)
 };

@@ -1,6 +1,7 @@
 require("dotenv").config();
 
 const path = require("path");
+const crypto = require("crypto");
 const express = require("express");
 const session = require("express-session");
 const SQLiteStoreFactory = require("connect-sqlite3");
@@ -9,10 +10,32 @@ const bcrypt = require("bcryptjs");
 const db = require("./db");
 const { port, sessionSecret } = require("./config");
 const { requireAuth } = require("./auth");
-const { encrypt, decrypt } = require("./crypto");
-const { addRecord, getRecords, normalizeDomain } = require("./kintone");
+const { addRecord, searchRecords, normalizeDomain, KintoneApiError } = require("./kintone");
 const { createJob, runJobInBackground, generateKintoneQueryFromInstruction } = require("./analysis");
 const { POST_GET_FIELD_TYPES, FIELD_TYPE_CODES } = require("./fieldTypes");
+const {
+  getManagedApps,
+  getManagedAppById,
+  getManagedAppFields,
+  deleteManagedApp,
+  updateAiPolicy,
+  syncAppSchema,
+  describeSyncSummary
+} = require("./apps");
+const {
+  LLM_PROVIDERS,
+  getUserCopilotToken,
+  saveUserCopilotToken,
+  getUserKintoneTokenForApp,
+  saveUserKintoneTokenForApp,
+  getUserLlmSettings,
+  saveUserLlmSettings
+} = require("./userSettings");
+const { getLlmForUser } = require("./llm");
+const { parseFieldInputValue } = require("./recordValues");
+const { STATUS_LABELS, recordAiOperation, listAiOperations, countAiOperationsByStatus } = require("./aiLog");
+const { listToolsForApp, toMcpToolList, TOOL_DEFINITIONS, ACCESS_LABELS } = require("./tools/kintoneTools");
+const { runOperator } = require("./operator");
 
 const app = express();
 const SQLiteStore = SQLiteStoreFactory(session);
@@ -20,6 +43,7 @@ const isVercel = !!process.env.VERCEL;
 
 app.set("view engine", "ejs");
 app.set("views", path.join(process.cwd(), "views"));
+app.locals.statusLabels = STATUS_LABELS;
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json({ limit: "1mb" }));
 app.use("/static", express.static(path.join(process.cwd(), "public")));
@@ -44,6 +68,7 @@ app.use(session(sessionConfig));
 
 app.use((req, res, next) => {
   res.locals.currentUser = req.session.username || null;
+  res.locals.currentPath = req.path;
   res.locals.error = req.session.flashError || null;
   res.locals.message = req.session.flashMessage || null;
   delete req.session.flashError;
@@ -51,107 +76,23 @@ app.use((req, res, next) => {
   next();
 });
 
-function getUserTokens(userId) {
-  const row = db.prepare("SELECT * FROM user_tokens WHERE user_id = ?").get(userId);
-  if (!row) return null;
-
-  return {
-    domain: row.kintone_domain,
-    appId: row.kintone_app_id,
-    kintoneApiToken: decrypt(row.kintone_api_token_enc),
-    copilotApiToken: decrypt(row.copilot_api_token_enc)
-  };
+// 画面共有しても漏れないよう、保存済みトークンは末尾4桁のみ表示する
+function maskSecret(secret) {
+  if (!secret) return "";
+  return `保存済み（…${secret.slice(-4)}）`;
 }
 
-function getManagedApps() {
-  return db
-    .prepare("SELECT id, app_name, kintone_domain, kintone_app_id FROM managed_kintone_apps ORDER BY app_name ASC")
-    .all();
+function safeReturnTo(value, fallback) {
+  const text = String(value || "");
+  return text.startsWith("/") && !text.startsWith("//") ? text : fallback;
 }
 
-function getManagedAppById(appId) {
-  return db
-    .prepare("SELECT id, app_name, kintone_domain, kintone_app_id FROM managed_kintone_apps WHERE id = ?")
-    .get(appId);
-}
-
-function getManagedAppFields(appId, mode) {
-  if (mode === "post") {
-    return db
-      .prepare("SELECT id, field_name, field_type, field_code, can_post, can_get FROM managed_kintone_app_fields WHERE managed_app_id = ? AND can_post = 1 ORDER BY id ASC")
-      .all(appId);
+function describeError(error) {
+  if (error instanceof KintoneApiError) {
+    const prefix = error.isPermissionError ? "kintoneの権限で拒否されました" : "kintoneエラー";
+    return `${prefix}: [${error.code || error.status}] ${error.kintoneMessage || error.message}`;
   }
-  if (mode === "get") {
-    return db
-      .prepare("SELECT id, field_name, field_type, field_code, can_post, can_get FROM managed_kintone_app_fields WHERE managed_app_id = ? AND can_get = 1 ORDER BY id ASC")
-      .all(appId);
-  }
-  return db
-    .prepare("SELECT id, field_name, field_type, field_code, can_post, can_get FROM managed_kintone_app_fields WHERE managed_app_id = ? ORDER BY id ASC")
-    .all(appId);
-}
-
-function getUserCopilotToken(userId) {
-  const row = db.prepare("SELECT copilot_api_token_enc FROM user_copilot_tokens WHERE user_id = ?").get(userId);
-  if (row) return decrypt(row.copilot_api_token_enc);
-
-  const legacy = getUserTokens(userId);
-  return legacy?.copilotApiToken || "";
-}
-
-function getUserKintoneTokenForApp(userId, managedAppId) {
-  const row = db
-    .prepare("SELECT kintone_api_token_enc FROM user_kintone_app_tokens WHERE user_id = ? AND managed_app_id = ?")
-    .get(userId, managedAppId);
-  if (row) return decrypt(row.kintone_api_token_enc);
-
-  // Legacy fallback for older schema where domain/app were stored in user_tokens.
-  const legacy = getUserTokens(userId);
-  const app = getManagedAppById(managedAppId);
-  if (!legacy || !app) return "";
-  if (legacy.domain === app.kintone_domain && String(legacy.appId) === String(app.kintone_app_id)) {
-    return legacy.kintoneApiToken;
-  }
-  return "";
-}
-
-function parseFieldInputValue(raw, fieldType) {
-  const text = String(raw ?? "").trim();
-  if (!text) return "";
-
-  if ((text.startsWith("{") && text.endsWith("}")) || (text.startsWith("[") && text.endsWith("]"))) {
-    try {
-      return JSON.parse(text);
-    } catch {
-      // fall through to plain-text parsing
-    }
-  }
-
-  if (fieldType === "CHECK_BOX" || fieldType === "MULTI_SELECT") {
-    return text.split(",").map((v) => v.trim()).filter(Boolean);
-  }
-
-  if (fieldType === "USER_SELECT" || fieldType === "ORGANIZATION_SELECT" || fieldType === "GROUP_SELECT") {
-    return text
-      .split(",")
-      .map((v) => v.trim())
-      .filter(Boolean)
-      .map((code) => ({ code }));
-  }
-
-  if (fieldType === "FILE") {
-    return text
-      .split(",")
-      .map((v) => v.trim())
-      .filter(Boolean)
-      .map((fileKey) => ({ fileKey }));
-  }
-
-  if (fieldType === "CREATOR" || fieldType === "MODIFIER") {
-    return { code: text };
-  }
-
-  return text;
+  return error.message;
 }
 
 function buildRecordBodyFromForm({ postFields, body }) {
@@ -162,6 +103,11 @@ function buildRecordBodyFromForm({ postFields, body }) {
     record[field.field_code] = { value };
   });
   return record;
+}
+
+function selectApp(apps, requestedId) {
+  const selectedAppId = Number(requestedId || apps[0]?.id || 0);
+  return selectedAppId ? getManagedAppById(selectedAppId) : null;
 }
 
 app.get("/", (req, res) => {
@@ -231,28 +177,62 @@ app.post("/auth/logout", requireAuth, (req, res) => {
 });
 
 app.get("/dashboard", requireAuth, (req, res) => {
+  const userId = req.session.userId;
   const jobs = db
-    .prepare("SELECT id, status, created_at, updated_at FROM analysis_jobs WHERE user_id = ? ORDER BY id DESC LIMIT 10")
-    .all(req.session.userId);
+    .prepare("SELECT id, status, created_at, updated_at FROM analysis_jobs WHERE user_id = ? ORDER BY id DESC LIMIT 5")
+    .all(userId);
 
-  const appCount = db.prepare("SELECT COUNT(*) AS count FROM managed_kintone_apps").get().count;
+  const apps = getManagedApps();
+  const fieldCount = db.prepare("SELECT COUNT(*) AS count FROM managed_kintone_app_fields WHERE source = 'kintone'").get().count;
+  const opCounts = countAiOperationsByStatus(userId);
+  const recentOps = listAiOperations({ userId, limit: 5 });
+  const llmSettings = getUserLlmSettings(userId);
+  const providerLabel = LLM_PROVIDERS.find((p) => p.code === llmSettings.provider)?.label || llmSettings.provider;
 
-  return res.render("dashboard", { title: "ダッシュボード", jobs, appCount });
+  return res.render("dashboard", {
+    title: "ダッシュボード",
+    jobs,
+    apps,
+    fieldCount,
+    opCounts,
+    recentOps,
+    providerLabel
+  });
 });
 
 app.get("/tokens", requireAuth, (req, res) => {
+  const userId = req.session.userId;
   const apps = getManagedApps();
-  const appTokens = apps.map((app) => ({
-    ...app,
-    userKintoneToken: getUserKintoneTokenForApp(req.session.userId, app.id)
+  const appTokens = apps.map((managedApp) => ({
+    ...managedApp,
+    tokenStatus: maskSecret(getUserKintoneTokenForApp(userId, managedApp.id))
   }));
-  const copilotApiToken = getUserCopilotToken(req.session.userId);
+  const llmSettings = getUserLlmSettings(userId);
 
   return res.render("tokens", {
-    title: "APIトークン管理",
+    title: "APIトークン・AI設定",
     appTokens,
-    copilotApiToken
+    providers: LLM_PROVIDERS,
+    llmProvider: llmSettings.provider,
+    copilotStatus: maskSecret(getUserCopilotToken(userId)),
+    geminiStatus: maskSecret(llmSettings.geminiApiKey),
+    anthropicStatus: maskSecret(llmSettings.anthropicApiKey)
   });
+});
+
+app.post("/settings/llm", requireAuth, (req, res) => {
+  const provider = String(req.body.provider || "");
+  if (!LLM_PROVIDERS.some((p) => p.code === provider)) {
+    req.session.flashError = "不明なAIプロバイダーです。";
+    return res.redirect("/tokens");
+  }
+  saveUserLlmSettings(req.session.userId, {
+    provider,
+    geminiApiKey: String(req.body.geminiApiKey || "").trim(),
+    anthropicApiKey: String(req.body.anthropicApiKey || "").trim()
+  });
+  req.session.flashMessage = "AI設定を保存しました（APIキーは暗号化保存）。";
+  return res.redirect("/tokens");
 });
 
 app.post("/tokens/copilot", requireAuth, (req, res) => {
@@ -263,23 +243,15 @@ app.post("/tokens/copilot", requireAuth, (req, res) => {
     return res.redirect("/tokens");
   }
 
-  db.prepare(`
-    INSERT INTO user_copilot_tokens (user_id, copilot_api_token_enc)
-    VALUES (?, ?)
-    ON CONFLICT(user_id)
-    DO UPDATE SET
-      copilot_api_token_enc = excluded.copilot_api_token_enc,
-      updated_at = CURRENT_TIMESTAMP
-  `).run(req.session.userId, encrypt(copilotApiToken));
-
+  saveUserCopilotToken(req.session.userId, copilotApiToken);
   req.session.flashMessage = "Copilotトークンを保存しました（暗号化保存）。";
   return res.redirect("/tokens");
 });
 
-app.post("/tokens/kintone", requireAuth, (req, res) => {
+app.post("/tokens/kintone", requireAuth, async (req, res) => {
   const managedAppId = Number(req.body.managedAppId);
-  const app = getManagedAppById(managedAppId);
-  if (!app) {
+  const managedApp = getManagedAppById(managedAppId);
+  if (!managedApp) {
     req.session.flashError = "対象アプリが見つかりません。";
     return res.redirect("/tokens");
   }
@@ -291,30 +263,31 @@ app.post("/tokens/kintone", requireAuth, (req, res) => {
     return res.redirect("/tokens");
   }
 
-  db.prepare(`
-    INSERT INTO user_kintone_app_tokens (user_id, managed_app_id, kintone_api_token_enc)
-    VALUES (?, ?, ?)
-    ON CONFLICT(user_id, managed_app_id)
-    DO UPDATE SET
-      kintone_api_token_enc = excluded.kintone_api_token_enc,
-      updated_at = CURRENT_TIMESTAMP
-  `).run(req.session.userId, managedAppId, encrypt(kintoneApiToken));
+  saveUserKintoneTokenForApp(req.session.userId, managedAppId, kintoneApiToken);
 
-  req.session.flashMessage = `kintone APIトークンを保存しました: ${app.app_name}`;
+  // トークン保存と同時にスキーマを取り込む（フィールドの手入力は不要）
+  try {
+    const summary = await syncAppSchema({ app: managedApp, apiToken: kintoneApiToken });
+    req.session.flashMessage = `kintone APIトークンを保存し、スキーマを同期しました: ${managedApp.app_name}（${describeSyncSummary(summary)}）`;
+  } catch (error) {
+    req.session.flashMessage = `kintone APIトークンを保存しました: ${managedApp.app_name}`;
+    req.session.flashError = `スキーマ同期に失敗しました。${describeError(error)}`;
+  }
   return res.redirect("/tokens");
 });
 
 app.get("/apps/manage", requireAuth, (req, res) => {
   const apps = getManagedApps();
-  const selectedAppId = Number(req.query.appId || apps[0]?.id || 0);
-  const selectedApp = selectedAppId ? getManagedAppById(selectedAppId) : null;
+  const selectedApp = selectApp(apps, req.query.appId);
   const fields = selectedApp ? getManagedAppFields(selectedApp.id) : [];
+  const hasToken = selectedApp ? !!getUserKintoneTokenForApp(req.session.userId, selectedApp.id) : false;
 
   return res.render("apps_manage", {
     title: "kintoneアプリ管理",
     apps,
     selectedApp,
     fields,
+    hasToken,
     fieldTypes: POST_GET_FIELD_TYPES
   });
 });
@@ -330,11 +303,12 @@ app.post("/apps/manage", requireAuth, (req, res) => {
   }
 
   try {
-    db.prepare(`
+    const info = db.prepare(`
       INSERT INTO managed_kintone_apps (kintone_domain, kintone_app_id, app_name)
       VALUES (?, ?, ?)
     `).run(domain, appId, appName);
-    req.session.flashMessage = "共通アプリを追加しました。";
+    req.session.flashMessage = "共通アプリを追加しました。次に「APIトークン・AI設定」でこのアプリのトークンを保存すると、フィールドが自動で取り込まれます。";
+    return res.redirect(`/apps/manage?appId=${info.lastInsertRowid}`);
   } catch {
     req.session.flashError = "同じドメイン/アプリIDの組み合わせは既に登録されています。";
   }
@@ -342,16 +316,54 @@ app.post("/apps/manage", requireAuth, (req, res) => {
 });
 
 app.post("/apps/manage/:appId/delete", requireAuth, (req, res) => {
-  const appId = Number(req.params.appId);
-  db.prepare("DELETE FROM managed_kintone_apps WHERE id = ?").run(appId);
+  deleteManagedApp(Number(req.params.appId));
   req.session.flashMessage = "共通アプリを削除しました。";
   return res.redirect("/apps/manage");
 });
 
+app.post("/apps/manage/:appId/sync", requireAuth, async (req, res) => {
+  const appId = Number(req.params.appId);
+  const returnTo = safeReturnTo(req.body.returnTo, `/apps/manage?appId=${appId}`);
+  const managedApp = getManagedAppById(appId);
+  if (!managedApp) {
+    req.session.flashError = "対象アプリが見つかりません。";
+    return res.redirect("/apps/manage");
+  }
+
+  const apiToken = getUserKintoneTokenForApp(req.session.userId, appId);
+  if (!apiToken) {
+    req.session.flashError = "スキーマ同期には、このアプリのkintone APIトークンが必要です。";
+    return res.redirect("/tokens");
+  }
+
+  try {
+    const summary = await syncAppSchema({ app: managedApp, apiToken });
+    req.session.flashMessage = `kintoneからスキーマを同期しました（${describeSyncSummary(summary)}）`;
+  } catch (error) {
+    req.session.flashError = `スキーマ同期に失敗しました。${describeError(error)}`;
+  }
+  return res.redirect(returnTo);
+});
+
+app.post("/apps/manage/:appId/policy", requireAuth, (req, res) => {
+  const appId = Number(req.params.appId);
+  if (!getManagedAppById(appId)) {
+    req.session.flashError = "対象アプリが見つかりません。";
+    return res.redirect("/apps/manage");
+  }
+  updateAiPolicy(appId, {
+    canRead: !!req.body.aiCanRead,
+    canCreate: !!req.body.aiCanCreate,
+    canUpdate: !!req.body.aiCanUpdate
+  });
+  req.session.flashMessage = "AI操作ポリシーを更新しました。";
+  return res.redirect(`/apps/manage?appId=${appId}`);
+});
+
 app.post("/apps/manage/:appId/fields", requireAuth, (req, res) => {
   const appId = Number(req.params.appId);
-  const app = getManagedAppById(appId);
-  if (!app) {
+  const managedApp = getManagedAppById(appId);
+  if (!managedApp) {
     req.session.flashError = "対象アプリが見つかりません。";
     return res.redirect("/apps/manage");
   }
@@ -388,6 +400,18 @@ app.post("/apps/manage/:appId/fields", requireAuth, (req, res) => {
   return res.redirect(`/apps/manage?appId=${appId}`);
 });
 
+app.post("/apps/manage/:appId/fields/:fieldId/flags", requireAuth, (req, res) => {
+  const appId = Number(req.params.appId);
+  const fieldId = Number(req.params.fieldId);
+  db.prepare(`
+    UPDATE managed_kintone_app_fields
+    SET can_post = ?, can_get = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND managed_app_id = ?
+  `).run(req.body.canPost ? 1 : 0, req.body.canGet ? 1 : 0, fieldId, appId);
+  req.session.flashMessage = "フィールドの公開範囲を更新しました。";
+  return res.redirect(`/apps/manage?appId=${appId}`);
+});
+
 app.post("/apps/manage/:appId/fields/:fieldId/delete", requireAuth, (req, res) => {
   const appId = Number(req.params.appId);
   const fieldId = Number(req.params.fieldId);
@@ -398,16 +422,15 @@ app.post("/apps/manage/:appId/fields/:fieldId/delete", requireAuth, (req, res) =
 
 app.get("/records/new", requireAuth, (req, res) => {
   const apps = getManagedApps();
-  const selectedAppId = Number(req.query.appId || apps[0]?.id || 0);
-  const selectedApp = selectedAppId ? getManagedAppById(selectedAppId) : null;
+  const selectedApp = selectApp(apps, req.query.appId);
   const postFields = selectedApp ? getManagedAppFields(selectedApp.id, "post") : [];
   return res.render("record_create", { title: "1件登録", apps, selectedApp, postFields });
 });
 
 app.post("/records", requireAuth, async (req, res) => {
   const managedAppId = Number(req.body.managedAppId);
-  const app = getManagedAppById(managedAppId);
-  if (!app) {
+  const managedApp = getManagedAppById(managedAppId);
+  if (!managedApp) {
     req.session.flashError = "対象のkintoneアプリが見つかりません。";
     return res.redirect("/tokens");
   }
@@ -428,15 +451,15 @@ app.post("/records", requireAuth, async (req, res) => {
 
   try {
     const result = await addRecord({
-      domain: app.kintone_domain,
-      appId: app.kintone_app_id,
+      domain: managedApp.kintone_domain,
+      appId: managedApp.kintone_app_id,
       apiToken: kintoneApiToken,
       record
     });
 
     req.session.flashMessage = `登録成功: record id=${result.id}, revision=${result.revision}`;
   } catch (error) {
-    req.session.flashError = `登録失敗: ${error.message}`;
+    req.session.flashError = `登録失敗: ${describeError(error)}`;
   }
 
   return res.redirect(`/records/new?appId=${managedAppId}`);
@@ -448,55 +471,82 @@ app.get("/records/analyze", requireAuth, (req, res) => {
     .all(req.session.userId);
 
   const apps = getManagedApps();
-  const selectedAppId = Number(req.query.appId || apps[0]?.id || 0);
-  const selectedApp = selectedAppId ? getManagedAppById(selectedAppId) : null;
+  const selectedApp = selectApp(apps, req.query.appId);
   const getFields = selectedApp ? getManagedAppFields(selectedApp.id, "get") : [];
 
   return res.render("analyze", { title: "レコード分析", jobs, apps, selectedApp, getFields });
 });
 
 app.post("/analysis/start", requireAuth, async (req, res) => {
+  const userId = req.session.userId;
   const managedAppId = Number(req.body.managedAppId);
-  const app = getManagedAppById(managedAppId);
-  if (!app) {
+  const managedApp = getManagedAppById(managedAppId);
+  if (!managedApp) {
     req.session.flashError = "対象のkintoneアプリが見つかりません。";
     return res.redirect("/tokens");
   }
 
-  const kintoneApiToken = getUserKintoneTokenForApp(req.session.userId, managedAppId);
-  const copilotApiToken = getUserCopilotToken(req.session.userId);
-  if (!kintoneApiToken || !copilotApiToken) {
-    req.session.flashError = "先にAPIトークン管理でkintone/Copilotトークンを設定してください。";
+  const kintoneApiToken = getUserKintoneTokenForApp(userId, managedAppId);
+  const { llm, error: llmError } = getLlmForUser(userId);
+  if (!kintoneApiToken || llmError) {
+    req.session.flashError = llmError || "先にAPIトークン管理でkintoneトークンを設定してください。";
     return res.redirect("/tokens");
   }
 
   const queryInstruction = String(req.body.query || "").trim();
   const getFields = getManagedAppFields(managedAppId, "get");
+  const startedAt = Date.now();
+  let query = "";
 
   try {
-    const query = await generateKintoneQueryFromInstruction({
-      copilotToken: copilotApiToken,
-      instruction: queryInstruction,
-      getFields
-    });
+    query = await generateKintoneQueryFromInstruction({ llm, instruction: queryInstruction, getFields });
 
-    const records = await getRecords({
-      domain: app.kintone_domain,
-      appId: app.kintone_app_id,
+    const { records } = await searchRecords({
+      domain: managedApp.kintone_domain,
+      appId: managedApp.kintone_app_id,
       apiToken: kintoneApiToken,
-      query
+      query,
+      fields: getFields.length ? ["$id", ...getFields.map((f) => f.field_code)] : undefined
     });
 
-    const jobId = createJob(req.session.userId, records);
-    runJobInBackground({
-      jobId,
-      copilotToken: copilotApiToken,
-      records
+    recordAiOperation({
+      userId,
+      managedAppId,
+      appName: managedApp.app_name,
+      source: "analysis",
+      provider: llm.provider,
+      model: llm.model,
+      toolName: "kintone-get-records",
+      access: "read",
+      input: { instruction: queryInstruction, query },
+      status: "ok",
+      summary: `${records.length}件取得して分析ジョブへ`,
+      durationMs: Date.now() - startedAt
     });
+
+    const jobId = createJob(userId, records);
+    runJobInBackground({ jobId, llm, records });
 
     req.session.flashMessage = `分析ジョブを開始しました。Job ID: ${jobId} / 使用query: ${query || "(なし)"}`;
   } catch (error) {
-    req.session.flashError = `分析開始に失敗: ${error.message}`;
+    if (error instanceof KintoneApiError) {
+      recordAiOperation({
+        userId,
+        managedAppId,
+        appName: managedApp.app_name,
+        source: "analysis",
+        provider: llm.provider,
+        model: llm.model,
+        toolName: "kintone-get-records",
+        access: "read",
+        input: { instruction: queryInstruction, query },
+        status: error.isPermissionError ? "denied_kintone" : "error",
+        summary: describeError(error),
+        kintoneErrorCode: error.code || String(error.status),
+        durationMs: Date.now() - startedAt
+      });
+    }
+    req.session.flashError = `分析開始に失敗: ${describeError(error)}`;
   }
 
   return res.redirect("/records/analyze");
@@ -520,6 +570,80 @@ app.get("/analysis/jobs/:jobId", requireAuth, (req, res) => {
     result: job.result,
     error: job.error
   });
+});
+
+app.get("/operator", requireAuth, (req, res) => {
+  const userId = req.session.userId;
+  const apps = getManagedApps();
+  const selectedApp = selectApp(apps, req.query.appId);
+  const tools = selectedApp ? listToolsForApp(selectedApp) : [];
+  const { llm, error: llmError } = getLlmForUser(userId);
+
+  return res.render("operator", {
+    title: "AIオペレーター",
+    apps,
+    selectedApp,
+    tools,
+    allTools: TOOL_DEFINITIONS,
+    accessLabels: ACCESS_LABELS,
+    mcpToolsJson: JSON.stringify({ tools: toMcpToolList(tools) }, null, 2),
+    hasToken: selectedApp ? !!getUserKintoneTokenForApp(userId, selectedApp.id) : false,
+    llmLabel: llm ? `${llm.label} / ${llm.model}` : null,
+    llmError
+  });
+});
+
+app.post("/operator/chat", requireAuth, async (req, res) => {
+  const userId = req.session.userId;
+  const managedApp = getManagedAppById(Number(req.body.managedAppId));
+  const message = String(req.body.message || "").trim();
+  if (!managedApp || !message) {
+    return res.status(400).json({ error: "アプリとメッセージを指定してください。" });
+  }
+
+  const apiToken = getUserKintoneTokenForApp(userId, managedApp.id);
+  if (!apiToken) {
+    return res.status(400).json({ error: "このアプリのkintone APIトークンが未設定です。" });
+  }
+
+  const { llm, error: llmError } = getLlmForUser(userId);
+  if (llmError) {
+    return res.status(400).json({ error: llmError });
+  }
+
+  const conversationId = /^[a-zA-Z0-9-]{8,64}$/.test(String(req.body.conversationId || ""))
+    ? String(req.body.conversationId)
+    : crypto.randomUUID();
+
+  try {
+    const result = await runOperator({
+      llm,
+      userId,
+      app: managedApp,
+      apiToken,
+      conversationId,
+      history: req.body.history,
+      message
+    });
+    return res.json({ ...result, conversationId, provider: llm.label });
+  } catch (error) {
+    return res.status(502).json({ error: `AIの呼び出しに失敗しました: ${describeError(error)}` });
+  }
+});
+
+// MCP tools/list と同じ形式で、AIに公開しているツールを返す
+app.get("/api/tools", requireAuth, (req, res) => {
+  const managedApp = getManagedAppById(Number(req.query.appId));
+  if (!managedApp) {
+    return res.status(404).json({ error: "not_found" });
+  }
+  return res.json({ tools: toMcpToolList(listToolsForApp(managedApp)) });
+});
+
+app.get("/audit", requireAuth, (req, res) => {
+  const logs = listAiOperations({ userId: req.session.userId, limit: 200 });
+  const counts = countAiOperationsByStatus(req.session.userId);
+  return res.render("audit", { title: "AI操作ログ", logs, counts, accessLabels: ACCESS_LABELS });
 });
 
 app.get("/health", (_req, res) => {

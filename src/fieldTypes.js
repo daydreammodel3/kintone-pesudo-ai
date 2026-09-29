@@ -3,6 +3,7 @@ const POST_GET_FIELD_TYPES = [
   { code: "MULTI_LINE_TEXT", label: "文字列(複数行)", canPost: true, canGet: true },
   { code: "RICH_TEXT", label: "リッチエディター", canPost: true, canGet: true },
   { code: "NUMBER", label: "数値", canPost: true, canGet: true },
+  { code: "CALC", label: "計算", canPost: false, canGet: true },
   { code: "CHECK_BOX", label: "チェックボックス", canPost: true, canGet: true },
   { code: "RADIO_BUTTON", label: "ラジオボタン", canPost: true, canGet: true },
   { code: "MULTI_SELECT", label: "複数選択", canPost: true, canGet: true },
@@ -16,6 +17,7 @@ const POST_GET_FIELD_TYPES = [
   { code: "LINK", label: "リンク", canPost: true, canGet: true },
   { code: "FILE", label: "添付ファイル", canPost: true, canGet: true },
   { code: "SUBTABLE", label: "テーブル", canPost: true, canGet: true },
+  { code: "RECORD_NUMBER", label: "レコード番号", canPost: false, canGet: true },
   { code: "CREATOR", label: "作成者", canPost: true, canGet: true },
   { code: "CREATED_TIME", label: "作成日時", canPost: true, canGet: true },
   { code: "MODIFIER", label: "更新者", canPost: false, canGet: true },
@@ -24,7 +26,16 @@ const POST_GET_FIELD_TYPES = [
 
 const FIELD_TYPE_CODES = new Set(POST_GET_FIELD_TYPES.map((v) => v.code));
 
+// kintoneが自動設定するフィールド。スキーマ同期時はPOST対象から外す。
+const SYSTEM_FIELD_TYPES = new Set(["RECORD_NUMBER", "CREATOR", "CREATED_TIME", "MODIFIER", "UPDATED_TIME", "CALC"]);
+
+function getFieldTypeMeta(code) {
+  return POST_GET_FIELD_TYPES.find((v) => v.code === code) || null;
+}
+
 module.exports = {
   POST_GET_FIELD_TYPES,
-  FIELD_TYPE_CODES
+  FIELD_TYPE_CODES,
+  SYSTEM_FIELD_TYPES,
+  getFieldTypeMeta
 };

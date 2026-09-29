@@ -3,20 +3,30 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title><%= title %> | kintone擬似AI</title>
+  <title><%= title %> | kintone擬似AI v2</title>
   <link rel="stylesheet" href="/static/css/style.css" />
 </head>
 <body>
   <div class="bg-shape"></div>
   <header class="site-header">
-    <div class="brand">kintone擬似AI</div>
+    <a class="brand" href="/">
+      <span class="brand-name">kintone擬似AI <span class="brand-ver">v2</span></span>
+      <span class="brand-tag">FDE × kintone Backend × MCP</span>
+    </a>
     <% if (currentUser) { %>
+      <% const navItems = [
+        ["/dashboard", "ダッシュボード"],
+        ["/operator", "AIオペレーター"],
+        ["/records/analyze", "レコード分析"],
+        ["/records/new", "1件登録"],
+        ["/audit", "AI操作ログ"],
+        ["/apps/manage", "アプリ管理"],
+        ["/tokens", "トークン・AI設定"]
+      ]; %>
       <nav>
-        <a href="/dashboard">ダッシュボード</a>
-        <a href="/apps/manage">kintoneアプリ管理</a>
-        <a href="/tokens">APIトークン管理</a>
-        <a href="/records/new">1件登録</a>
-        <a href="/records/analyze">レコード分析</a>
+        <% navItems.forEach(([href, label]) => { %>
+          <a href="<%= href %>" class="<%= currentPath === href ? 'active' : '' %>"><%= label %></a>
+        <% }) %>
       </nav>
       <form method="post" action="/auth/logout">
         <button type="submit" class="ghost">ログアウト</button>

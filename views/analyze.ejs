@@ -3,8 +3,9 @@
 <section class="panel">
   <h1>GETによる一覧取得と分析</h1>
   <% if (!apps.length) { %>
-    <p class="hint">先に「kintoneアプリ管理」で共通アプリを登録してください。</p>
+    <p class="hint">先に「アプリ管理」で共通アプリを登録してください。</p>
   <% } %>
+  <p class="hint">自然言語の条件をAIがkintoneクエリに変換し、AIが読み取りを許可されたフィールドだけを取得して分析します。取得操作は<a href="/audit">AI操作ログ</a>に記録されます。</p>
   <form method="post" action="/analysis/start" class="form-grid wide">
     <label>対象kintoneアプリ
       <select name="managedAppId" required>
