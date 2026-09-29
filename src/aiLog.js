@@ -31,16 +31,20 @@ function recordAiOperation(entry) {
   );
 }
 
+// userId が null のときは全ユーザー分（ゲストの閲覧用）
 function listAiOperations({ userId, limit }) {
   return db
-    .prepare("SELECT * FROM ai_operation_logs WHERE user_id = ? ORDER BY id DESC LIMIT ?")
-    .all(userId, limit || 100);
+    .prepare(`
+      SELECT l.*, u.username FROM ai_operation_logs l LEFT JOIN users u ON u.id = l.user_id
+      WHERE (? IS NULL OR l.user_id = ?) ORDER BY l.id DESC LIMIT ?
+    `)
+    .all(userId, userId, limit || 100);
 }
 
 function countAiOperationsByStatus(userId) {
   return db
-    .prepare("SELECT status, COUNT(*) AS count FROM ai_operation_logs WHERE user_id = ? GROUP BY status")
-    .all(userId)
+    .prepare("SELECT status, COUNT(*) AS count FROM ai_operation_logs WHERE (? IS NULL OR user_id = ?) GROUP BY status")
+    .all(userId, userId)
     .reduce((acc, row) => ({ ...acc, [row.status]: row.count }), {});
 }
 

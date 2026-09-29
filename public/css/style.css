@@ -212,6 +212,27 @@ button.ghost {
   color: var(--ok);
 }
 
+.alert.guest-note {
+  background: #eef4ff;
+  color: #28457a;
+}
+
+.guest-login {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 6px;
+}
+
+.guest-login button {
+  width: 100%;
+}
+
+.guest-login .hint {
+  margin: 0;
+}
+
 .quick-links {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

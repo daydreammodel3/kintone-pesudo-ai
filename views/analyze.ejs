@@ -1,5 +1,11 @@
 <%- include('partials/header', { title }) %>
 
+<% if (isGuest) { %>
+<section class="panel">
+  <h1>分析結果</h1>
+  <p class="hint">全ユーザーが実行したレコード分析の結果です。AIが自然言語の条件をkintoneクエリに変換し、読み取りを許可されたフィールドだけを取得して分析しています。</p>
+</section>
+<% } else { %>
 <section class="panel">
   <h1>GETによる一覧取得と分析</h1>
   <% if (!apps.length) { %>
@@ -25,6 +31,7 @@
     <button type="submit" <%= !apps.length ? 'disabled' : '' %>>分析ジョブ開始</button>
   </form>
 </section>
+<% } %>
 
 <section class="panel">
   <h2>分析ジョブ一覧</h2>
@@ -37,6 +44,7 @@
           <div>
             <strong>#<%= job.id %></strong>
             <span class="status"><%= job.status %></span>
+            <% if (isGuest) { %><span class="hint">（<%= job.username %>）</span><% } %>
           </div>
           <p class="hint">作成: <%= job.created_at %> / 更新: <%= job.updated_at %></p>
           <% if (job.error) { %>

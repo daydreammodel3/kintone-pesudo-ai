@@ -9,7 +9,7 @@ const bcrypt = require("bcryptjs");
 
 const db = require("./db");
 const { port, sessionSecret, geminiModel, anthropicModel, copilotModel } = require("./config");
-const { requireAuth } = require("./auth");
+const { GUEST_LABEL, GUEST_PATHS, isGuest, requireAuth, requireViewer } = require("./auth");
 const { addRecord, searchRecords, normalizeDomain, KintoneApiError } = require("./kintone");
 const { createJob, runJobInBackground, generateKintoneQueryFromInstruction } = require("./analysis");
 const { POST_GET_FIELD_TYPES, FIELD_TYPE_CODES } = require("./fieldTypes");
@@ -96,6 +96,8 @@ app.use((req, res, next) => {
   res.locals.designs = DESIGNS;
   res.locals.currentUrl = req.originalUrl;
   res.locals.currentUser = req.session.username || null;
+  res.locals.isGuest = isGuest(req);
+  res.locals.guestPaths = GUEST_PATHS;
   res.locals.currentPath = req.path;
   res.locals.error = req.session.flashError || null;
   res.locals.message = req.session.flashMessage || null;
@@ -170,17 +172,17 @@ app.use((req, res, next) => {
 });
 
 app.get("/", (req, res) => {
-  if (req.session.userId) return res.redirect("/dashboard");
+  if (req.session.userId || isGuest(req)) return res.redirect("/dashboard");
   return res.redirect("/login");
 });
 
 app.get("/login", (req, res) => {
-  if (req.session.userId) return res.redirect("/dashboard");
+  if (req.session.userId || isGuest(req)) return res.redirect("/dashboard");
   return res.render("login", { title: "ログイン" });
 });
 
 app.get("/register", (req, res) => {
-  if (req.session.userId) return res.redirect("/dashboard");
+  if (req.session.userId || isGuest(req)) return res.redirect("/dashboard");
   return res.render("register", { title: "ユーザー登録" });
 });
 
@@ -229,24 +231,47 @@ app.post("/auth/login", async (req, res) => {
   return res.redirect("/dashboard");
 });
 
-app.post("/auth/logout", requireAuth, (req, res) => {
+// プレゼン用: パスワードなしで閲覧専用のゲストとしてログイン
+app.post("/auth/guest", (req, res) => {
+  delete req.session.userId;
+  req.session.role = "guest";
+  req.session.username = GUEST_LABEL;
+  return res.redirect("/dashboard");
+});
+
+app.post("/auth/logout", requireViewer, (req, res) => {
   req.session.destroy(() => {
     res.redirect("/login");
   });
 });
 
-app.get("/dashboard", requireAuth, (req, res) => {
-  const userId = req.session.userId;
-  const jobs = db
-    .prepare("SELECT id, status, created_at, updated_at FROM analysis_jobs WHERE user_id = ? ORDER BY id DESC LIMIT 5")
-    .all(userId);
+// 分析ジョブ一覧。userId が null のときは全ユーザー分（ゲストの閲覧用）
+function listAnalysisJobs(userId, limit) {
+  return db
+    .prepare(`
+      SELECT j.id, j.status, j.created_at, j.updated_at, j.error, u.username
+      FROM analysis_jobs j LEFT JOIN users u ON u.id = j.user_id
+      WHERE (? IS NULL OR j.user_id = ?) ORDER BY j.id DESC LIMIT ?
+    `)
+    .all(userId, userId, limit);
+}
+
+app.get("/dashboard", requireViewer, (req, res) => {
+  // ゲストはマネージャー視点で全ユーザー分を見る
+  const userId = isGuest(req) ? null : req.session.userId;
+  const jobs = listAnalysisJobs(userId, 5);
 
   const apps = getManagedApps();
   const fieldCount = db.prepare("SELECT COUNT(*) AS count FROM managed_kintone_app_fields WHERE source = 'kintone'").get().count;
   const opCounts = countAiOperationsByStatus(userId);
   const recentOps = listAiOperations({ userId, limit: 5 });
-  const llmSettings = getUserLlmSettings(userId);
-  const providerLabel = LLM_PROVIDERS.find((p) => p.code === llmSettings.provider)?.label || llmSettings.provider;
+  let providerLabel;
+  if (userId) {
+    const llmSettings = getUserLlmSettings(userId);
+    providerLabel = LLM_PROVIDERS.find((p) => p.code === llmSettings.provider)?.label || llmSettings.provider;
+  } else {
+    providerLabel = LLM_PROVIDERS.filter((p) => !p.retired).map((p) => p.label.replace(/（.*）/, "")).join(" / ");
+  }
 
   return res.render("dashboard", {
     title: "ダッシュボード",
@@ -524,10 +549,11 @@ app.post("/records", requireAuth, async (req, res) => {
   return res.redirect(`/records/new?appId=${managedAppId}`);
 });
 
-app.get("/records/analyze", requireAuth, (req, res) => {
-  const jobs = db
-    .prepare("SELECT id, status, created_at, updated_at, error FROM analysis_jobs WHERE user_id = ? ORDER BY id DESC LIMIT 20")
-    .all(req.session.userId);
+app.get("/records/analyze", requireViewer, (req, res) => {
+  if (isGuest(req)) {
+    return res.render("analyze", { title: "分析結果", jobs: listAnalysisJobs(null, 20), apps: [], selectedApp: null, getFields: [] });
+  }
+  const jobs = listAnalysisJobs(req.session.userId, 20);
 
   const apps = getManagedApps();
   const selectedApp = selectApp(apps, req.query.appId);
@@ -611,11 +637,12 @@ app.post("/analysis/start", requireAuth, async (req, res) => {
   return res.redirect("/records/analyze");
 });
 
-app.get("/analysis/jobs/:jobId", requireAuth, (req, res) => {
+app.get("/analysis/jobs/:jobId", requireViewer, (req, res) => {
   const jobId = Number(req.params.jobId);
+  const userId = isGuest(req) ? null : req.session.userId;
   const job = db
-    .prepare("SELECT * FROM analysis_jobs WHERE id = ? AND user_id = ?")
-    .get(jobId, req.session.userId);
+    .prepare("SELECT * FROM analysis_jobs WHERE id = ? AND (? IS NULL OR user_id = ?)")
+    .get(jobId, userId, userId);
 
   if (!job) {
     return res.status(404).json({ error: "not_found" });
