@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
+    "lan-url": "node scripts/lan-url.js",
     "generate:demo-csv": "node scripts/generate_demo_csv.js",
     "generate:vague-reports": "node scripts/generate_vague_reports.js"
   },

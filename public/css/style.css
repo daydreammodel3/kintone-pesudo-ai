@@ -168,6 +168,9 @@ button {
 input,
 textarea,
 select {
+  /* 長い選択肢（アプリ名など）で親より広がらないようにする */
+  min-width: 0;
+  max-width: 100%;
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid var(--border);
@@ -768,13 +771,78 @@ details summary {
   }
 }
 
+/* スマホ・タブレット: 表は最小幅を保って枠内で横スクロール */
+@media (max-width: 800px) {
+  .table-wrap {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-wrap > table {
+    min-width: 600px;
+  }
+
+  .table-wrap > .audit-table {
+    min-width: 1080px;
+  }
+
+  /* アプリ名・内容の列が狭いと行が縦に伸びるため、幅を確保する */
+  .audit-table td:nth-child(3) {
+    min-width: 150px;
+  }
+
+  .audit-table td:nth-child(7) {
+    min-width: 280px;
+  }
+}
+
 @media (max-width: 640px) {
+  /* v1: ロゴ・ログアウト・デザインを1行目、ナビを2行目の横スクロールにまとめる */
   .site-header {
-    display: grid;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    padding: 10px 16px;
+  }
+
+  .site-header .brand {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .site-header .brand-tag,
+  .site-header .design-switch-label {
+    display: none;
   }
 
   .site-header nav {
+    order: 3;
+    flex: 1 0 100%;
+    flex-wrap: nowrap;
     gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .site-header nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .site-header nav a {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 6px 12px;
+    font-size: 14px;
+  }
+
+  .site-header > form button {
+    padding: 6px 12px;
+  }
+
+  /* iOS Safari は16px未満の入力欄にフォーカスすると画面を拡大するため、スマホでは16pxにする */
+  html[data-design] input,
+  html[data-design] select,
+  html[data-design] textarea,
+  html[data-design] .design-switch select {
+    font-size: 16px;
   }
 }

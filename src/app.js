@@ -36,6 +36,7 @@ const { parseFieldInputValue } = require("./recordValues");
 const { STATUS_LABELS, recordAiOperation, listAiOperations, countAiOperationsByStatus } = require("./aiLog");
 const { listToolsForApp, toMcpToolList, TOOL_DEFINITIONS, ACCESS_LABELS } = require("./tools/kintoneTools");
 const { runOperator } = require("./operator");
+const { lanAddresses, isInDocker } = require("./network");
 
 const app = express();
 const SQLiteStore = SQLiteStoreFactory(session);
@@ -720,6 +721,11 @@ app.get("/health", (_req, res) => {
 if (require.main === module) {
   app.listen(port, () => {
     console.log(`kintone擬似AI app listening on http://localhost:${port}`);
+    if (isInDocker()) {
+      console.log("同じWi-Fiの他端末から開くURLは、ホスト側で `npm run lan-url` を実行すると表示されます。");
+    } else {
+      lanAddresses().forEach((address) => console.log(`  同じWi-Fiの他端末から: http://${address}:${port}`));
+    }
   });
 }
 
