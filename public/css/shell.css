@@ -1,0 +1,352 @@
+/*
+ * サイドバー型レイアウト（v2 / v3 共通）
+ * <html data-shell> のときに適用。色は各デザインのCSS変数で差し替える:
+ *   --sidebar-w --rail-w --sb-bg --sb-bg-solid --sb-hover --sb-active-bg --sb-active-ink
+ *   --sb-active-icon --topbar-bg --topbar-line --brand-grad --danger-soft
+ */
+
+/* ---------- レイアウト（サイドバー + メイン） ---------- */
+
+[data-shell] .shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  min-height: 100vh;
+  transition: grid-template-columns 220ms ease;
+}
+
+[data-shell] .shell-guest {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-shell].sidebar-collapsed .shell:not(.shell-guest) {
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+}
+
+[data-shell] .sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 14px;
+  background: var(--sb-bg);
+  backdrop-filter: blur(10px);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  overflow-x: hidden;
+  z-index: 30;
+}
+
+[data-shell] .sb-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 14px;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+[data-shell] .brand-mark {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 30px;
+}
+
+[data-shell] .sb-brand-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+[data-shell] .sb-brand-name {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+[data-shell] .sb-ver {
+  background: var(--brand-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-weight: 800;
+}
+
+[data-shell] .sb-brand-tag {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+[data-shell] .sb-nav {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  align-content: start;
+}
+
+[data-shell] .sb-group {
+  margin: 14px 10px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+[data-shell] .sb-link,
+[data-shell] .sb-logout {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  text-decoration: none;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  transition: background 150ms ease, transform 150ms ease;
+}
+
+[data-shell] .sb-link svg,
+[data-shell] .sb-logout svg,
+[data-shell] .icon-btn svg {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+[data-shell] .sb-link:hover {
+  background: var(--sb-hover);
+  transform: translateX(2px);
+}
+
+[data-shell] .sb-link.active {
+  background: var(--sb-active-bg);
+  color: var(--sb-active-ink);
+}
+
+[data-shell] .sb-link.active svg {
+  stroke: var(--sb-active-icon);
+}
+
+[data-shell] .sb-foot {
+  display: grid;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+[data-shell] .sb-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+[data-shell] .sb-avatar {
+  flex: 0 0 30px;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--brand-grad);
+  color: #fff;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+[data-shell] .sb-logout {
+  width: 100%;
+  box-shadow: none;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+[data-shell] .sb-logout:hover:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+  filter: none;
+}
+
+[data-shell] .sb-logout:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* 折りたたみ時（PC）: アイコンだけのレール */
+[data-shell].sidebar-collapsed .sidebar {
+  padding: 18px 12px;
+}
+
+[data-shell].sidebar-collapsed .sb-label,
+[data-shell].sidebar-collapsed .sb-brand-text,
+[data-shell].sidebar-collapsed .sb-group {
+  display: none;
+}
+
+[data-shell].sidebar-collapsed .sb-nav {
+  gap: 6px;
+}
+
+[data-shell].sidebar-collapsed .sb-link,
+[data-shell].sidebar-collapsed .sb-logout,
+[data-shell].sidebar-collapsed .sb-user {
+  justify-content: center;
+  padding: 11px 0;
+}
+
+[data-shell].sidebar-collapsed .sb-brand {
+  justify-content: center;
+  padding: 6px 0 14px;
+}
+
+[data-shell].sidebar-collapsed .sb-link:hover {
+  transform: none;
+}
+
+[data-shell] .sb-backdrop {
+  display: none;
+}
+
+/* トップバー */
+[data-shell] .main-col {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-shell] .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 28px;
+  background: var(--topbar-bg);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+
+/* 上端に細い「つなぐ」グラデーション */
+[data-shell] .topbar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--topbar-line);
+  opacity: 0.55;
+}
+
+[data-shell] .topbar-title {
+  flex: 1;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-shell] .topbar-brand {
+  font-weight: 800;
+}
+
+[data-shell] .icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+[data-shell] .icon-btn:hover {
+  background: var(--sb-hover);
+  border-color: var(--border);
+}
+
+/* ---------- レスポンシブ: スマホ・タブレットではドロワー ---------- */
+
+@media (max-width: 900px) {
+  [data-shell] .shell,
+  [data-shell].sidebar-collapsed .shell:not(.shell-guest) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-shell] .sidebar,
+  [data-shell].sidebar-collapsed .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: min(280px, 84vw);
+    padding: 18px 14px;
+    transform: translateX(-102%);
+    transition: transform 220ms ease;
+    box-shadow: 0 20px 50px rgba(35, 31, 66, 0.2);
+    background: var(--sb-bg-solid);
+  }
+
+  /* ドロワーでは常にラベル付きで表示 */
+  [data-shell].sidebar-collapsed .sb-label,
+  [data-shell].sidebar-collapsed .sb-brand-text,
+  [data-shell].sidebar-collapsed .sb-group {
+    display: revert;
+  }
+
+  [data-shell].sidebar-collapsed .sb-link,
+  [data-shell].sidebar-collapsed .sb-logout,
+  [data-shell].sidebar-collapsed .sb-user,
+  [data-shell].sidebar-collapsed .sb-brand {
+    justify-content: flex-start;
+    padding: 10px 12px;
+  }
+
+  [data-shell].sidebar-open .sidebar {
+    transform: translateX(0);
+  }
+
+  [data-shell].sidebar-open .sb-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    background: rgba(35, 31, 66, 0.35);
+  }
+
+  [data-shell] .topbar {
+    padding: 10px 16px;
+  }
+
+  [data-shell] .container {
+    padding: 20px 16px 40px;
+  }
+
+  .design-switch-label {
+    display: none;
+  }
+}
+

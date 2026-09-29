@@ -1,11 +1,36 @@
 <%- include('partials/header', { title }) %>
 
 <section class="panel">
-  <h1>ユーザーごとのAPIトークン管理</h1>
-  <p class="hint">保存時は暗号化され、表示時のみ復号化されます。kintoneトークンはアプリごとに保存します。</p>
-  <form method="post" action="/tokens/copilot" class="form-grid wide">
-    <label>GitHub Copilot APIトークン
-      <input type="text" name="copilotApiToken" value="<%= copilotApiToken %>" />
+  <h1>AI設定</h1>
+  <p class="hint">AIオペレーターとレコード分析で使う生成AIを選びます。APIキー・トークンは暗号化して保存し、画面には末尾4桁だけ表示します。空欄のまま保存すると既存の値を維持します。</p>
+  <% if (providers.some((p) => p.code === llmProvider && p.retired)) { %>
+    <p class="alert error">現在の設定は GitHub Models ですが、GitHub Models は2026年7月30日に提供終了しており、レコード分析・AIオペレーターは動きません。Gemini API に切り替えてください。</p>
+  <% } %>
+  <% if (llmProvider === 'anthropic') { %>
+    <p class="alert error">現在の設定は Claude API です。レコード分析・AIオペレーターを Gemini で動かすには、Gemini API を選んで保存してください。</p>
+  <% } %>
+  <form method="post" action="/settings/llm" class="form-grid wide">
+    <fieldset class="provider-select">
+      <legend>使用するAI</legend>
+      <% providers.forEach((p) => { %>
+        <label class="policy-option">
+          <input type="radio" name="provider" value="<%= p.code %>" <%= llmProvider === p.code ? 'checked' : '' %> />
+          <span><strong><%= p.label %></strong></span>
+        </label>
+      <% }) %>
+    </fieldset>
+    <label>Gemini APIキー（Google AI Studio で発行）
+      <input type="password" name="geminiApiKey" autocomplete="off" placeholder="<%= geminiStatus || 'AIza...' %>" />
+    </label>
+    <label>Claude APIキー（Anthropic・任意）
+      <input type="password" name="anthropicApiKey" autocomplete="off" placeholder="<%= anthropicStatus || 'sk-ant-...' %>" />
+    </label>
+    <button type="submit">AI設定を保存</button>
+  </form>
+
+  <form method="post" action="/tokens/copilot" class="form-grid wide token-block">
+    <label>GitHub Copilot / GitHub Models トークン
+      <input type="password" name="copilotApiToken" autocomplete="off" placeholder="<%= copilotStatus || 'ghp_... / github_pat_...' %>" />
     </label>
     <button type="submit">Copilotトークン保存</button>
   </form>
@@ -13,17 +38,18 @@
 
 <section class="panel">
   <h2>kintone APIトークン（アプリ別）</h2>
+  <p class="hint">AIはこのトークンの権限の範囲でしかkintoneを操作できません。読み取り専用で試したい場合は「レコード閲覧」だけを付与したトークンを使ってください。保存すると、同時にフィールド構成を同期します。</p>
   <% if (!appTokens.length) { %>
-    <p class="hint">共通アプリが未登録です。先に「kintoneアプリ管理」で登録してください。</p>
+    <p class="hint">共通アプリが未登録です。先に「アプリ管理」で登録してください。</p>
   <% } else { %>
-    <% appTokens.forEach((app) => { %>
+    <% appTokens.forEach((a) => { %>
       <form method="post" action="/tokens/kintone" class="form-grid wide token-block">
-        <input type="hidden" name="managedAppId" value="<%= app.id %>" />
-        <p><strong><%= app.app_name %></strong> (<%= app.kintone_domain %> / appId: <%= app.kintone_app_id %>)</p>
+        <input type="hidden" name="managedAppId" value="<%= a.id %>" />
+        <p><strong><%= a.app_name %></strong> <span class="hint">(<%= a.kintone_domain %> / appId: <%= a.kintone_app_id %>)</span></p>
         <label>kintone APIトークン
-          <input type="text" name="kintoneApiToken" value="<%= app.userKintoneToken %>" />
+          <input type="password" name="kintoneApiToken" autocomplete="off" placeholder="<%= a.tokenStatus || '未設定' %>" />
         </label>
-        <button type="submit">このアプリのトークン保存</button>
+        <button type="submit">保存してスキーマ同期</button>
       </form>
     <% }) %>
   <% } %>

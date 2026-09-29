@@ -2,14 +2,74 @@
 
 <section class="panel">
   <h1>ダッシュボード</h1>
-  <p>ログインユーザー: <strong><%= currentUser %></strong></p>
-  <p>共通kintoneアプリ登録数: <strong><%= appCount %></strong></p>
-  <div class="quick-links">
-    <a class="card" href="/apps/manage">アクセス先kintoneアプリ管理</a>
-    <a class="card" href="/tokens">APIトークン管理</a>
-    <a class="card" href="/records/new">POSTで1件登録</a>
-    <a class="card" href="/records/analyze">GETで一覧取得と分析</a>
+  <p class="hint">フロント ＝ 生成AI / ツール層（MCP相当）、バックエンド ＝ kintone。AIの操作はすべてkintoneの権限と操作ログの内側で動きます。</p>
+
+  <ol class="arch-flow" aria-label="アーキテクチャ">
+    <li class="arch-node">
+      <span class="arch-kicker">現場 / FDE</span>
+      <strong>自然言語で依頼</strong>
+      <a href="/operator">AIオペレーター →</a>
+    </li>
+    <li class="arch-node">
+      <span class="arch-kicker">生成AI</span>
+      <strong><%= providerLabel %></strong>
+      <a href="/tokens">AI設定 →</a>
+    </li>
+    <li class="arch-node">
+      <span class="arch-kicker">ツール層（MCP相当）</span>
+      <strong>ポリシーで公開範囲を制御</strong>
+      <a href="/apps/manage">AI操作ポリシー →</a>
+    </li>
+    <li class="arch-node arch-node-kintone">
+      <span class="arch-kicker">kintone</span>
+      <strong>データ・権限・監査</strong>
+      <a href="/audit">AI操作ログ →</a>
+    </li>
+  </ol>
+</section>
+
+<section class="stat-row">
+  <div class="stat">
+    <span class="stat-value"><%= apps.length %></span>
+    <span class="stat-label">接続中のkintoneアプリ</span>
   </div>
+  <div class="stat">
+    <span class="stat-value"><%= fieldCount %></span>
+    <span class="stat-label">kintoneから同期したフィールド</span>
+  </div>
+  <div class="stat">
+    <span class="stat-value"><%= opCounts.ok || 0 %></span>
+    <span class="stat-label">AIによる操作（成功）</span>
+  </div>
+  <div class="stat">
+    <span class="stat-value"><%= (opCounts.denied_policy || 0) + (opCounts.denied_kintone || 0) %></span>
+    <span class="stat-label">権限・ポリシーで拒否</span>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>最近のAI操作</h2>
+  <% if (!recentOps.length) { %>
+    <p class="hint">まだAI操作はありません。<a href="/operator">AIオペレーター</a>から依頼してみてください。</p>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>日時(UTC)</th><th>アプリ</th><th>ツール</th><th>結果</th><th>内容</th></tr></thead>
+        <tbody>
+          <% recentOps.forEach((op) => { %>
+            <tr>
+              <td class="nowrap"><%= op.created_at %></td>
+              <td><%= op.app_name %></td>
+              <td><code><%= op.tool_name %></code></td>
+              <td><span class="badge badge-<%= op.status %>"><%= statusLabels[op.status] || op.status %></span></td>
+              <td><%= op.summary %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <p><a href="/audit">すべての操作ログを見る →</a></p>
+  <% } %>
 </section>
 
 <section class="panel">
@@ -17,19 +77,21 @@
   <% if (!jobs.length) { %>
     <p class="hint">まだジョブがありません。</p>
   <% } else { %>
-    <table>
-      <thead><tr><th>ID</th><th>状態</th><th>作成</th><th>更新</th></tr></thead>
-      <tbody>
-        <% jobs.forEach((job) => { %>
-          <tr>
-            <td><%= job.id %></td>
-            <td><%= job.status %></td>
-            <td><%= job.created_at %></td>
-            <td><%= job.updated_at %></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>状態</th><th>作成</th><th>更新</th></tr></thead>
+        <tbody>
+          <% jobs.forEach((job) => { %>
+            <tr>
+              <td><%= job.id %></td>
+              <td><%= job.status %></td>
+              <td><%= job.created_at %></td>
+              <td><%= job.updated_at %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
   <% } %>
 </section>
 

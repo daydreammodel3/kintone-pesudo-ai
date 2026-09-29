@@ -1,0 +1,48 @@
+<%- include('partials/header', { title }) %>
+
+<section class="panel">
+  <h1>AI操作ログ</h1>
+  <p class="hint">AIがどのアプリに、どのツールで、何をしたか。アプリ側ポリシーによる拒否と、kintone側の権限による拒否を区別して記録しています。登録・更新はkintone側でもレコードの変更履歴として残ります。</p>
+  <div class="policy-strip">
+    <% Object.entries(statusLabels).forEach(([status, label]) => { %>
+      <span class="badge badge-<%= status %>"><%= label %>: <%= counts[status] || 0 %></span>
+    <% }) %>
+  </div>
+</section>
+
+<section class="panel">
+  <% if (!logs.length) { %>
+    <p class="hint">まだ記録はありません。</p>
+  <% } else { %>
+    <div class="table-wrap">
+      <table class="audit-table">
+        <thead>
+          <tr><th>日時(UTC)</th><th>経路</th><th>アプリ</th><th>ツール</th><th>操作</th><th>結果</th><th>内容</th><th>AI</th></tr>
+        </thead>
+        <tbody>
+          <% logs.forEach((log) => { %>
+            <tr>
+              <td class="nowrap"><%= log.created_at %></td>
+              <td><%= log.source === 'operator' ? 'オペレーター' : log.source === 'analysis' ? '分析' : log.source %>
+                <% if (log.conversation_id) { %><br /><span class="hint mono" title="<%= log.conversation_id %>">#<%= log.conversation_id.slice(0, 8) %></span><% } %>
+              </td>
+              <td><%= log.app_name %></td>
+              <td><code><%= log.tool_name %></code></td>
+              <td><%= accessLabels[log.access] || log.access %></td>
+              <td><span class="badge badge-<%= log.status %>"><%= statusLabels[log.status] || log.status %></span></td>
+              <td>
+                <%= log.summary %>
+                <% if (log.input_json && log.input_json !== '{}') { %>
+                  <details><summary>入力</summary><pre class="result code"><%= log.input_json %></pre></details>
+                <% } %>
+              </td>
+              <td class="hint"><%= log.model %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
+<%- include('partials/footer') %>

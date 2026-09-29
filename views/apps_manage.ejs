@@ -1,9 +1,9 @@
 <%- include('partials/header', { title }) %>
 
 <section class="panel">
-  <h1>アクセス先kintoneアプリ管理（全ユーザー共通）</h1>
-  <p class="hint">ここで登録したアプリとフィールド定義を全ユーザーが共通利用します。</p>
-  <form method="post" action="/apps/manage" class="form-grid wide">
+  <h1>kintoneアプリ管理（全ユーザー共通）</h1>
+  <p class="hint">登録するのは「どのアプリにつなぐか」だけ。フィールド構成はkintoneから自動で同期します。kintone側で項目を足せば、マイグレーションなしでこのアプリとAIに反映されます。</p>
+  <form method="post" action="/apps/manage" class="form-grid wide form-inline">
     <label>kintoneドメイン
       <input type="text" name="kintoneDomain" placeholder="sample.cybozu.com" required />
     </label>
@@ -22,33 +22,83 @@
   <% if (!apps.length) { %>
     <p class="hint">まだ登録されていません。</p>
   <% } else { %>
-    <table>
-      <thead><tr><th>ID</th><th>アプリ名</th><th>ドメイン</th><th>アプリID</th><th>操作</th></tr></thead>
-      <tbody>
-        <% apps.forEach((app) => { %>
-          <tr>
-            <td><%= app.id %></td>
-            <td><a href="/apps/manage?appId=<%= app.id %>"><%= app.app_name %></a></td>
-            <td><%= app.kintone_domain %></td>
-            <td><%= app.kintone_app_id %></td>
-            <td>
-              <form method="post" action="/apps/manage/<%= app.id %>/delete" onsubmit="return confirm('このアプリと関連フィールド定義を削除しますか？')">
-                <button type="submit" class="ghost">削除</button>
-              </form>
-            </td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>アプリ名</th><th>ドメイン</th><th>アプリID</th><th>スキーマ同期(UTC)</th><th>AI許可</th><th>操作</th></tr></thead>
+        <tbody>
+          <% apps.forEach((a) => { %>
+            <tr class="<%= selectedApp && selectedApp.id === a.id ? 'row-selected' : '' %>">
+              <td><a href="/apps/manage?appId=<%= a.id %>"><%= a.app_name %></a></td>
+              <td><%= a.kintone_domain %></td>
+              <td><%= a.kintone_app_id %></td>
+              <td class="nowrap"><%= a.schema_synced_at || '未同期' %></td>
+              <td class="nowrap">
+                <span class="chip <%= a.ai_can_read ? 'chip-on' : 'chip-off' %>">読</span>
+                <span class="chip <%= a.ai_can_create ? 'chip-on' : 'chip-off' %>">登</span>
+                <span class="chip <%= a.ai_can_update ? 'chip-on' : 'chip-off' %>">更</span>
+              </td>
+              <td>
+                <form method="post" action="/apps/manage/<%= a.id %>/delete" onsubmit="return confirm('このアプリと関連フィールド定義・トークンを削除しますか？')">
+                  <button type="submit" class="ghost">削除</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
   <% } %>
 </section>
 
+<% if (selectedApp) { %>
 <section class="panel">
-  <h2>フィールド定義管理</h2>
-  <% if (!selectedApp) { %>
-    <p class="hint">上のアプリ一覧から対象アプリを選択してください。</p>
+  <div class="panel-head">
+    <div>
+      <h2><%= selectedApp.app_name %> のスキーマ</h2>
+      <p class="hint"><%= selectedApp.kintone_domain %> / appId: <%= selectedApp.kintone_app_id %> ・ 最終同期(UTC): <%= selectedApp.schema_synced_at || '未同期' %></p>
+    </div>
+    <% if (hasToken) { %>
+      <form method="post" action="/apps/manage/<%= selectedApp.id %>/sync">
+        <button type="submit">kintoneから同期</button>
+      </form>
+    <% } else { %>
+      <a class="button-link" href="/tokens">トークンを設定して同期</a>
+    <% } %>
+  </div>
+
+  <% if (!fields.length) { %>
+    <p class="hint">フィールドがありません。「kintoneから同期」を実行してください。</p>
   <% } else { %>
-    <p class="hint">対象アプリ: <strong><%= selectedApp.app_name %></strong>（<%= selectedApp.kintone_domain %> / appId: <%= selectedApp.kintone_app_id %>）</p>
+    <p class="hint">「AIが読む」「AIが書く」は、AIオペレーター・分析・1件登録でこのアプリに公開するフィールドの範囲です。kintone側の権限とは別に、ここでさらに絞り込めます。</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>名称</th><th>コード</th><th>種別</th><th>選択肢</th><th>AIが読む</th><th>AIが書く</th><th></th></tr></thead>
+        <tbody>
+          <% fields.forEach((f) => { %>
+            <tr>
+              <td>
+                <%= f.field_name %><% if (f.required) { %> <span class="req">*</span><% } %>
+                <% if (f.source === 'manual') { %><span class="chip chip-off" title="手動登録（kintoneと未同期）">手動</span><% } %>
+              </td>
+              <td><code><%= f.field_code %></code></td>
+              <td class="hint"><%= f.field_type %></td>
+              <td class="hint"><%= f.options.join(' / ') %></td>
+              <td colspan="3">
+                <form method="post" action="/apps/manage/<%= selectedApp.id %>/fields/<%= f.id %>/flags" class="flag-form">
+                  <label class="check"><input type="checkbox" name="canGet" <%= f.can_get ? 'checked' : '' %> onchange="this.form.submit()" /> 読</label>
+                  <label class="check"><input type="checkbox" name="canPost" <%= f.can_post ? 'checked' : '' %> onchange="this.form.submit()" /> 書</label>
+                  <noscript><button type="submit" class="ghost">更新</button></noscript>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+
+  <details class="manual-add">
+    <summary>フィールドを手動で追加（v1方式・通常は不要）</summary>
     <form method="post" action="/apps/manage/<%= selectedApp.id %>/fields" class="form-grid wide">
       <label>フィールド名
         <input type="text" name="fieldName" required />
@@ -63,35 +113,32 @@
       <label>フィールドコード
         <input type="text" name="fieldCode" required />
       </label>
-      <label><input type="checkbox" name="canPost" checked /> POST送信対象</label>
-      <label><input type="checkbox" name="canGet" checked /> GET取得対象</label>
+      <label class="check"><input type="checkbox" name="canPost" checked /> POST送信対象</label>
+      <label class="check"><input type="checkbox" name="canGet" checked /> GET取得対象</label>
       <button type="submit">フィールドを追加</button>
     </form>
-
-    <% if (!fields.length) { %>
-      <p class="hint">フィールド定義はまだありません。</p>
-    <% } else { %>
-      <table>
-        <thead><tr><th>名称</th><th>種別</th><th>コード</th><th>POST</th><th>GET</th><th>操作</th></tr></thead>
-        <tbody>
-          <% fields.forEach((f) => { %>
-            <tr>
-              <td><%= f.field_name %></td>
-              <td><%= f.field_type %></td>
-              <td><%= f.field_code %></td>
-              <td><%= f.can_post ? 'Yes' : 'No' %></td>
-              <td><%= f.can_get ? 'Yes' : 'No' %></td>
-              <td>
-                <form method="post" action="/apps/manage/<%= selectedApp.id %>/fields/<%= f.id %>/delete" onsubmit="return confirm('このフィールド定義を削除しますか？')">
-                  <button type="submit" class="ghost">削除</button>
-                </form>
-              </td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    <% } %>
-  <% } %>
+  </details>
 </section>
+
+<section class="panel">
+  <h2>AI操作ポリシー</h2>
+  <p class="hint">AIに見せるツールを決めます。許可していない操作のツールはAIに渡されず、呼ばれても実行前に拒否されます。実際の可否は、さらにkintone APIトークンの権限でも制御されます。</p>
+  <form method="post" action="/apps/manage/<%= selectedApp.id %>/policy" class="policy-form">
+    <label class="policy-option">
+      <input type="checkbox" name="aiCanRead" <%= selectedApp.ai_can_read ? 'checked' : '' %> />
+      <span><strong>読み取り</strong><br /><code>kintone-get-form-fields</code> <code>kintone-get-records</code></span>
+    </label>
+    <label class="policy-option">
+      <input type="checkbox" name="aiCanCreate" <%= selectedApp.ai_can_create ? 'checked' : '' %> />
+      <span><strong>登録</strong><br /><code>kintone-add-record</code></span>
+    </label>
+    <label class="policy-option">
+      <input type="checkbox" name="aiCanUpdate" <%= selectedApp.ai_can_update ? 'checked' : '' %> />
+      <span><strong>更新</strong><br /><code>kintone-update-record</code></span>
+    </label>
+    <button type="submit">ポリシーを保存</button>
+  </form>
+</section>
+<% } %>
 
 <%- include('partials/footer') %>

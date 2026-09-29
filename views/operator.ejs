@@ -1,0 +1,80 @@
+<%- include('partials/header', { title }) %>
+
+<section class="panel">
+  <h1>AIオペレーター</h1>
+  <p class="hint">現場の言葉で依頼すると、AIがツール（MCPと同じ形式）を使ってkintoneを読み書きします。操作はアプリ側ポリシーとkintoneの権限の内側で実行され、すべて<a href="/audit">AI操作ログ</a>に残ります。</p>
+
+  <form method="get" action="/operator" class="form-grid wide">
+    <label>対象kintoneアプリ
+      <select name="appId" onchange="this.form.submit()">
+        <% apps.forEach((a) => { %>
+          <option value="<%= a.id %>" <%= selectedApp && selectedApp.id === a.id ? 'selected' : '' %>>
+            <%= a.app_name %> (<%= a.kintone_domain %> / appId: <%= a.kintone_app_id %>)
+          </option>
+        <% }) %>
+      </select>
+    </label>
+    <noscript><button type="submit">切り替え</button></noscript>
+  </form>
+
+  <% if (!apps.length) { %>
+    <p class="alert error">先に「アプリ管理」でkintoneアプリを登録してください。</p>
+  <% } else if (!hasToken) { %>
+    <p class="alert error">このアプリのkintone APIトークンが未設定です。<a href="/tokens">トークン・AI設定</a>で保存してください。</p>
+  <% } %>
+  <% if (llmError) { %>
+    <p class="alert error"><%= llmError %> <a href="/tokens">設定する</a></p>
+  <% } %>
+
+  <% if (selectedApp) { %>
+    <div class="policy-strip">
+      <span class="hint">AIに許可されている操作:</span>
+      <% allTools.forEach((t) => { const enabled = tools.some((x) => x.name === t.name); %>
+        <span class="chip <%= enabled ? 'chip-on' : 'chip-off' %>" title="<%= t.description %>">
+          <%= accessLabels[t.access] %>: <code><%= t.name %></code>
+        </span>
+      <% }) %>
+      <a class="small-link" href="/apps/manage?appId=<%= selectedApp.id %>">ポリシーを変更</a>
+    </div>
+  <% } %>
+</section>
+
+<% if (selectedApp && hasToken && !llmError) { %>
+<section class="panel operator-panel"
+  id="operator"
+  data-app-id="<%= selectedApp.id %>"
+  data-llm-label="<%= llmLabel %>">
+  <div class="chat-log" id="chat-log" aria-live="polite">
+    <div class="chat-empty" id="chat-empty">
+      <p><strong><%= selectedApp.app_name %></strong> に対して依頼してみましょう。 使用AI: <%= llmLabel %></p>
+      <div class="suggestions">
+        <button type="button" class="ghost suggestion">このアプリにはどんな項目がある？</button>
+        <button type="button" class="ghost suggestion">優先度が高以上で、作業期限が今月中のものを一覧にして</button>
+        <button type="button" class="ghost suggestion">さっきから画面が固まる、という問い合わせを優先度中で登録して</button>
+        <button type="button" class="ghost suggestion">期限切れのアラートを優先度緊急に変更して</button>
+      </div>
+    </div>
+  </div>
+
+  <form class="chat-form" id="chat-form">
+    <textarea id="chat-input" rows="2" placeholder="例: 来週までに対応が必要なアラートを教えて" required></textarea>
+    <div class="chat-actions">
+      <button type="button" class="ghost" id="chat-reset">会話をリセット</button>
+      <button type="submit" id="chat-send">送信</button>
+    </div>
+  </form>
+</section>
+<% } %>
+
+<% if (selectedApp) { %>
+<section class="panel">
+  <details>
+    <summary>AIに公開しているツール定義（MCP tools/list 形式）</summary>
+    <p class="hint">この定義はMCPサーバーの <code>tools/list</code> と同じ形です。命名はサイボウズ公式 kintone MCPサーバーに倣っています。<a href="/api/tools?appId=<%= selectedApp.id %>">JSONで開く</a></p>
+    <pre class="result code"><%= mcpToolsJson %></pre>
+  </details>
+</section>
+<% } %>
+
+<script src="/static/js/operator.js"></script>
+<%- include('partials/footer') %>

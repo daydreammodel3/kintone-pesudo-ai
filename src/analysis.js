@@ -1,5 +1,4 @@
 const db = require("./db");
-const { copilotApiBase, copilotModel, copilotTimeoutMs } = require("./config");
 
 function buildSummary(records) {
   const sample = records.slice(0, 10);
@@ -9,48 +8,10 @@ function buildSummary(records) {
   }, null, 2);
 }
 
-async function callCopilot({ copilotToken, records }) {
+async function analyzeRecords({ llm, records }) {
   const system = "あなたはkintoneレコード分析アシスタントです。要点、傾向、異常、改善提案を日本語で簡潔に示してください。";
   const user = `次のレコード群を分析してください。\n${buildSummary(records)}`;
-  return callCopilotChat({ copilotToken, system, user, temperature: 0.2 });
-}
-
-async function callCopilotChat({ copilotToken, system, user, temperature }) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), copilotTimeoutMs);
-
-  try {
-    const response = await fetch(`${copilotApiBase}/chat/completions`, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${copilotToken}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: copilotModel,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user }
-        ],
-        temperature: temperature ?? 0.2
-      })
-    });
-
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(`Copilot API failed: ${response.status} ${JSON.stringify(body)}`);
-    }
-
-    const text = body?.choices?.[0]?.message?.content;
-    if (!text) {
-      throw new Error("Copilot API response has no message content.");
-    }
-
-    return text;
-  } finally {
-    clearTimeout(timeout);
-  }
+  return llm.chat({ system, user, temperature: 0.2 });
 }
 
 function looksLikeKintoneQuery(text) {
@@ -311,7 +272,7 @@ function buildDateRangeQueryFromInstruction(instruction, getFields) {
   return `${dateField.field_code} >= "${from}" and ${dateField.field_code} <= "${to}"`;
 }
 
-function extractQueryFromCopilotResponse(text) {
+function extractQueryFromLlmResponse(text) {
   const raw = String(text || "").trim();
   if (!raw) return "";
 
@@ -325,7 +286,7 @@ function extractQueryFromCopilotResponse(text) {
   return raw.replace(/^```[a-z]*\n?/i, "").replace(/```$/i, "").trim();
 }
 
-async function generateKintoneQueryFromInstruction({ copilotToken, instruction, getFields }) {
+async function generateKintoneQueryFromInstruction({ llm, instruction, getFields }) {
   const text = String(instruction || "").trim();
   if (!text) return "";
 
@@ -351,7 +312,10 @@ async function generateKintoneQueryFromInstruction({ copilotToken, instruction, 
   }
 
   const fieldsSummary = (getFields || [])
-    .map((f) => `${f.field_name}(${f.field_code}:${f.field_type})`)
+    .map((f) => {
+      const options = f.options && f.options.length ? ` 選択肢[${f.options.join("/")}]` : "";
+      return `${f.field_name}(${f.field_code}:${f.field_type}${options})`;
+    })
     .join(", ");
 
   const system = [
@@ -372,14 +336,13 @@ async function generateKintoneQueryFromInstruction({ copilotToken, instruction, 
     "補足: 例えば『5月1日から5月8日まで』は日付比較条件に変換してください。"
   ].join("\n");
 
-  const responseText = await callCopilotChat({
-    copilotToken,
+  const responseText = await llm.chat({
     system,
     user,
     temperature: 0
   });
 
-  return extractQueryFromCopilotResponse(responseText);
+  return extractQueryFromLlmResponse(responseText);
 }
 
 function createJob(userId, records) {
@@ -408,10 +371,10 @@ function updateJob(jobId, patch) {
   `).run(next.status, next.result, next.error, jobId);
 }
 
-async function runJobInBackground({ jobId, copilotToken, records }) {
+async function runJobInBackground({ jobId, llm, records }) {
   updateJob(jobId, { status: "running", error: null });
   try {
-    const result = await callCopilot({ copilotToken, records });
+    const result = await analyzeRecords({ llm, records });
     updateJob(jobId, { status: "completed", result, error: null });
   } catch (error) {
     updateJob(jobId, { status: "failed", error: error.message, result: null });
