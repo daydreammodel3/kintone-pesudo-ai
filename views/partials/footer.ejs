@@ -1,3 +1,11 @@
+<% if (design !== 'v1') { %>
+      </main>
+    </div>
+  </div>
+  <script src="/static/js/shell.js"></script>
+  <% if (design === 'v3') { %><script src="/static/js/ops.js"></script><% } %>
+<% } else { %>
   </main>
+<% } %>
 </body>
 </html>

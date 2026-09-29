@@ -77,6 +77,14 @@ body {
   letter-spacing: 0.04em;
 }
 
+.site-header > form {
+  flex-shrink: 0;
+}
+
+.site-header > form button {
+  white-space: nowrap;
+}
+
 .site-header nav {
   display: flex;
   gap: 12px;
@@ -102,6 +110,8 @@ body {
   width: min(1080px, 94vw);
   margin: 24px auto;
   display: grid;
+  /* 表など幅の広い子要素でグリッドが画面外に広がらないようにする */
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
 }
 
@@ -708,6 +718,34 @@ details summary {
 
 .audit-table td {
   vertical-align: top;
+}
+
+/* デザイン切り替え（ドロップダウン） */
+.design-switch {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.design-switch label {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.design-switch-label {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.design-switch select {
+  padding: 6px 28px 6px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
 }
 
 @media (max-width: 800px) {

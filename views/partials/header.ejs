@@ -1,28 +1,160 @@
+<%
+  // ナビゲーション定義（全デザイン共通）。[URL, 名称, 24x24の線画パス, v3のショートカット（g → キー）]
+  const navGroups = [
+    { label: "つかう", items: [
+      ["/dashboard", "ダッシュボード", "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z", "d"],
+      ["/operator", "AIオペレーター", "M4 5h16v11H10l-5 4v-4H4zM8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01", "o"],
+      ["/records/analyze", "レコード分析", "M4 20V11M10 20V5M16 20v-6M21 20H3", "a"],
+      ["/records/new", "1件登録", "M5 4h14v16H5zM12 8v8M8 12h8", "n"]
+    ]},
+    { label: "見守る", items: [
+      ["/audit", "AI操作ログ", "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4", "l"]
+    ]},
+    { label: "つなぐ設定", items: [
+      ["/apps/manage", "アプリ管理", "M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3", "m"],
+      ["/tokens", "トークン・AI設定", "M15 13a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12.2 11.8L4 20M7 17l2 2M5 19l2 2", "t"]
+    ]}
+  ];
+  const navItems = navGroups.flatMap((g) => g.items);
+  const useShell = design !== 'v1';
+  const isV3 = design === 'v3';
+%>
 <!doctype html>
-<html lang="ja">
+<html lang="ja" data-design="<%= design %>"<%- useShell ? ' data-shell' : '' %>>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title><%= title %> | kintone擬似AI v2</title>
+  <title><%= title %> | kintone擬似AI</title>
   <link rel="stylesheet" href="/static/css/style.css" />
+  <% if (useShell) { %>
+    <link rel="stylesheet" href="/static/css/design-<%= design %>.css" />
+    <link rel="stylesheet" href="/static/css/shell.css" />
+    <script>
+      // サイドバーの折りたたみ状態を描画前に反映（チラつき防止）
+      try {
+        if (localStorage.getItem("sidebar") === "collapsed") document.documentElement.classList.add("sidebar-collapsed");
+      } catch (e) {}
+    </script>
+  <% } %>
 </head>
 <body>
+<% if (useShell) { %>
+  <div class="shell<%= currentUser ? '' : ' shell-guest' %>">
+    <% if (currentUser) { %>
+      <aside class="sidebar" id="sidebar" aria-label="メニュー">
+        <a class="sb-brand" href="/">
+          <svg class="brand-mark" viewBox="0 0 48 32" aria-hidden="true">
+            <defs>
+              <linearGradient id="bridge-grad" x1="0" x2="1" y1="0" y2="0">
+                <stop offset="0" stop-color="#FFB400" />
+                <stop offset="0.5" stop-color="#FF6F61" />
+                <stop offset="1" stop-color="#7B5CFF" />
+              </linearGradient>
+            </defs>
+            <path d="M14 16 C 20 6, 28 26, 34 16" fill="none" stroke="url(#bridge-grad)" stroke-width="3" stroke-linecap="round" />
+            <rect x="2" y="8" width="14" height="16" rx="4" fill="#FFB400" />
+            <path d="M40 6 L42.2 13.8 L50 16 L42.2 18.2 L40 26 L37.8 18.2 L30 16 L37.8 13.8 Z" transform="translate(-4 0) scale(1)" fill="#7B5CFF" />
+          </svg>
+          <span class="sb-brand-text">
+            <span class="sb-brand-name">kintone擬似AI</span>
+            <span class="sb-brand-tag">kintone × AI をつなぐ</span>
+          </span>
+        </a>
+
+        <nav class="sb-nav">
+          <% navGroups.forEach((group) => { %>
+            <p class="sb-group"><%= group.label %></p>
+            <% group.items.forEach(([href, label, icon, key]) => { const active = currentPath === href; %>
+              <a href="<%= href %>" class="sb-link<%= active ? ' active' : '' %>" <%- active ? 'aria-current="page"' : '' %> title="<%= label %>">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="<%= icon %>" /></svg>
+                <span class="sb-label"><%= label %></span>
+                <% if (isV3) { %><kbd class="sb-kbd" aria-label="ショートカット g <%= key %>">g <%= key %></kbd><% } %>
+              </a>
+            <% }) %>
+          <% }) %>
+        </nav>
+
+        <div class="sb-foot">
+          <span class="sb-user" title="<%= currentUser %>">
+            <span class="sb-avatar" aria-hidden="true"><%= currentUser.slice(0, 1).toUpperCase() %></span>
+            <span class="sb-label"><%= currentUser %></span>
+          </span>
+          <form method="post" action="/auth/logout">
+            <button type="submit" class="sb-logout" title="ログアウト">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10" /></svg>
+              <span class="sb-label">ログアウト</span>
+            </button>
+          </form>
+        </div>
+      </aside>
+      <div class="sb-backdrop" data-sidebar-close></div>
+      <% if (isV3) { %>
+        <dialog class="palette" id="palette" aria-label="コマンドパレット">
+          <input type="text" class="palette-input" id="palette-input" placeholder="画面名・操作を入力（↑↓で選択、Enterで実行、Escで閉じる）" autocomplete="off" />
+          <ul class="palette-list" id="palette-list" role="listbox">
+            <% navItems.forEach(([href, label, icon, key]) => { %>
+              <li role="option" data-href="<%= href %>" data-keywords="<%= label %> <%= href %>">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="<%= icon %>" /></svg>
+                <span><%= label %>へ移動</span><kbd>g <%= key %></kbd>
+              </li>
+            <% }) %>
+            <% designs.filter((d) => d.code !== design).forEach((d) => { %>
+              <li role="option" data-design="<%= d.code %>" data-keywords="デザイン design <%= d.label %>">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM4 9h16M9 9v10" /></svg>
+                <span>デザインを「<%= d.label %>」に切り替え</span>
+              </li>
+            <% }) %>
+            <li role="option" data-action="logout" data-keywords="ログアウト logout">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10" /></svg>
+              <span>ログアウト</span>
+            </li>
+          </ul>
+          <p class="palette-help"><kbd>⌘K</kbd> パレット　<kbd>g</kbd>→<kbd>d</kbd> 画面移動　<kbd>/</kbd> 入力欄へ　<kbd>?</kbd> 一覧</p>
+        </dialog>
+      <% } %>
+    <% } %>
+
+    <div class="main-col">
+      <header class="topbar">
+        <% if (currentUser) { %>
+          <button type="button" class="icon-btn" id="sidebar-toggle" aria-controls="sidebar" aria-expanded="true" aria-label="メニューの表示を切り替え">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+          </button>
+        <% } else { %>
+          <span class="topbar-brand">kintone擬似AI</span>
+        <% } %>
+        <span class="topbar-title"><%= title %></span>
+        <% if (isV3 && currentUser && typeof opsStatus !== 'undefined') { %>
+          <ul class="ops-status" aria-label="システム状態">
+            <li class="ops-chip <%= opsStatus.llmReady ? 'is-ok' : 'is-bad' %>" title="使用中のAI">
+              <span class="ops-dot" aria-hidden="true"></span>
+              <span class="ops-key">LLM</span><span class="ops-val"><%= opsStatus.llmLabel %><% if (opsStatus.llmModel) { %> · <%= opsStatus.llmModel %><% } %><%= opsStatus.llmReady ? '' : '（未設定）' %></span>
+            </li>
+            <li class="ops-chip" title="接続中のkintoneアプリ"><span class="ops-key">APPS</span><span class="ops-val"><%= opsStatus.appCount %></span></li>
+            <li>
+              <a class="ops-chip <%= opsStatus.denied24h || opsStatus.errors24h ? 'is-warn' : 'is-ok' %>" href="/audit" title="直近24時間のAI操作（拒否 / エラー）">
+                <span class="ops-dot" aria-hidden="true"></span>
+                <span class="ops-key">24h</span><span class="ops-val">拒否 <%= opsStatus.denied24h %> / エラー <%= opsStatus.errors24h %></span>
+              </a>
+            </li>
+            <li class="ops-chip" title="実行環境"><span class="ops-key">ENV</span><span class="ops-val"><%= opsStatus.env %></span></li>
+          </ul>
+          <button type="button" class="ghost palette-btn" id="palette-open" aria-haspopup="dialog" aria-controls="palette">
+            <span>コマンド</span><kbd>⌘K</kbd>
+          </button>
+        <% } %>
+        <%- include('design_switch') %>
+      </header>
+
+      <main class="container">
+<% } else { %>
   <div class="bg-shape"></div>
   <header class="site-header">
     <a class="brand" href="/">
-      <span class="brand-name">kintone擬似AI <span class="brand-ver">v2</span></span>
+      <span class="brand-name">kintone擬似AI</span>
       <span class="brand-tag">FDE × kintone Backend × MCP</span>
     </a>
     <% if (currentUser) { %>
-      <% const navItems = [
-        ["/dashboard", "ダッシュボード"],
-        ["/operator", "AIオペレーター"],
-        ["/records/analyze", "レコード分析"],
-        ["/records/new", "1件登録"],
-        ["/audit", "AI操作ログ"],
-        ["/apps/manage", "アプリ管理"],
-        ["/tokens", "トークン・AI設定"]
-      ]; %>
       <nav>
         <% navItems.forEach(([href, label]) => { %>
           <a href="<%= href %>" class="<%= currentPath === href ? 'active' : '' %>"><%= label %></a>
@@ -32,9 +164,11 @@
         <button type="submit" class="ghost">ログアウト</button>
       </form>
     <% } %>
+    <%- include('design_switch') %>
   </header>
 
   <main class="container">
+<% } %>
     <% if (error) { %>
       <p class="alert error"><%= error %></p>
     <% } %>

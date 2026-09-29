@@ -1,0 +1,12 @@
+<form method="post" action="/settings/design" class="design-switch">
+  <input type="hidden" name="returnTo" value="<%= currentUrl %>" />
+  <label>
+    <span class="design-switch-label">デザイン</span>
+    <select name="design" onchange="this.form.submit()" aria-label="画面デザインの切り替え">
+      <% designs.forEach((d) => { %>
+        <option value="<%= d.code %>" <%= design === d.code ? 'selected' : '' %>><%= d.label %></option>
+      <% }) %>
+    </select>
+  </label>
+  <noscript><button type="submit">切替</button></noscript>
+</form>

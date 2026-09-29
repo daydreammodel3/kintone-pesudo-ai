@@ -8,7 +8,7 @@ const SQLiteStoreFactory = require("connect-sqlite3");
 const bcrypt = require("bcryptjs");
 
 const db = require("./db");
-const { port, sessionSecret } = require("./config");
+const { port, sessionSecret, geminiModel, anthropicModel, copilotModel } = require("./config");
 const { requireAuth } = require("./auth");
 const { addRecord, searchRecords, normalizeDomain, KintoneApiError } = require("./kintone");
 const { createJob, runJobInBackground, generateKintoneQueryFromInstruction } = require("./analysis");
@@ -66,7 +66,34 @@ if (!isVercel) {
 
 app.use(session(sessionConfig));
 
+// 画面デザイン。新しいデザインは末尾に追加していく
+const DESIGNS = [
+  { code: "v1", label: "v1 クラシック" },
+  { code: "v2", label: "v2 Bridge" },
+  { code: "v3", label: "v3 DevOps" }
+];
+const DEFAULT_DESIGN = "v2";
+// 旧名称のCookieを引き継ぐ
+const LEGACY_DESIGN_NAMES = { classic: "v1", bridge: "v2" };
+const DESIGN_COOKIE = "ui_design";
+
+function resolveDesign(value) {
+  const code = LEGACY_DESIGN_NAMES[value] || value;
+  return DESIGNS.some((d) => d.code === code) ? code : DEFAULT_DESIGN;
+}
+
+function readCookie(req, name) {
+  const pair = String(req.headers.cookie || "")
+    .split(";")
+    .map((v) => v.trim())
+    .find((v) => v.startsWith(`${name}=`));
+  return pair ? decodeURIComponent(pair.slice(name.length + 1)) : "";
+}
+
 app.use((req, res, next) => {
+  res.locals.design = resolveDesign(readCookie(req, DESIGN_COOKIE));
+  res.locals.designs = DESIGNS;
+  res.locals.currentUrl = req.originalUrl;
   res.locals.currentUser = req.session.username || null;
   res.locals.currentPath = req.path;
   res.locals.error = req.session.flashError || null;
@@ -109,6 +136,37 @@ function selectApp(apps, requestedId) {
   const selectedAppId = Number(requestedId || apps[0]?.id || 0);
   return selectedAppId ? getManagedAppById(selectedAppId) : null;
 }
+
+// v3（DevOps）のステータスバー: 使用中のAI・接続アプリ数・直近24時間の拒否/エラー件数
+const PROVIDER_MODELS = { gemini: geminiModel, anthropic: anthropicModel, github: copilotModel };
+
+app.use((req, res, next) => {
+  if (res.locals.design !== "v3" || !req.session.userId) return next();
+  const userId = req.session.userId;
+  const settings = getUserLlmSettings(userId);
+  const provider = LLM_PROVIDERS.find((p) => p.code === settings.provider);
+  const hasKey = settings.provider === "gemini" ? !!settings.geminiApiKey
+    : settings.provider === "anthropic" ? !!settings.anthropicApiKey
+      : !!settings.copilotApiToken;
+  const recent = db.prepare(`
+    SELECT
+      SUM(CASE WHEN status IN ('denied_policy', 'denied_kintone') THEN 1 ELSE 0 END) AS denied,
+      SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS errors
+    FROM ai_operation_logs
+    WHERE user_id = ? AND created_at >= datetime('now', '-1 day')
+  `).get(userId);
+
+  res.locals.opsStatus = {
+    llmLabel: provider ? provider.label.replace(/（.*）/, "") : settings.provider,
+    llmModel: PROVIDER_MODELS[settings.provider] || "",
+    llmReady: hasKey && !provider?.retired,
+    appCount: getManagedApps().length,
+    denied24h: recent.denied || 0,
+    errors24h: recent.errors || 0,
+    env: process.env.VERCEL ? "vercel" : process.env.NODE_ENV || "local"
+  };
+  return next();
+});
 
 app.get("/", (req, res) => {
   if (req.session.userId) return res.redirect("/dashboard");
@@ -644,6 +702,15 @@ app.get("/audit", requireAuth, (req, res) => {
   const logs = listAiOperations({ userId: req.session.userId, limit: 200 });
   const counts = countAiOperationsByStatus(req.session.userId);
   return res.render("audit", { title: "AI操作ログ", logs, counts, accessLabels: ACCESS_LABELS });
+});
+
+// ログイン前の画面でも切り替えられるよう、認証は不要
+app.post("/settings/design", (req, res) => {
+  const design = String(req.body.design || "");
+  if (DESIGNS.some((d) => d.code === design)) {
+    res.cookie(DESIGN_COOKIE, design, { maxAge: 1000 * 60 * 60 * 24 * 365, sameSite: "lax", httpOnly: true });
+  }
+  return res.redirect(safeReturnTo(req.body.returnTo, "/"));
 });
 
 app.get("/health", (_req, res) => {

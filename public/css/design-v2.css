@@ -1,0 +1,421 @@
+/*
+ * デザイン v2「Bridge」
+ * kintone側（データ）＝あたたかいイエロー、AI側＝あかるいバイオレット。
+ * そのあいだを「つなぐ」グラデーションをモチーフに、楽しく使える画面を目指す。
+ * style.css の上に重ね、すべて [data-design="v2"] 配下に限定している。
+ */
+
+[data-design="v2"] {
+  --sun: #ffb400;
+  --sun-ink: #8a5700;
+  --sun-soft: #fff4d6;
+  --coral: #ff6f61;
+  --coral-soft: #ffe9e5;
+  --violet: #7b5cff;
+  --violet-ink: #4b2fd6;
+  --violet-soft: #efeaff;
+  --mint: #12b886;
+  --mint-ink: #0b7a59;
+  --mint-soft: #e2f8f0;
+
+  --ink: #231f42;
+  --muted: #6e6a8f;
+  --card: #ffffff;
+  --surface: #fbfaff;
+  --border: #e9e5f6;
+  --accent: var(--violet-ink);
+  --accent2: var(--coral);
+  --danger: #d93a40;
+  --ok: var(--mint-ink);
+
+  --bridge: linear-gradient(120deg, #ffb400 0%, #ff6f61 50%, #7b5cff 100%);
+  --bridge-deep: linear-gradient(120deg, #e89400 0%, #f0564a 50%, #6a4bf0 100%);
+  --shadow: 0 10px 30px rgba(75, 47, 214, 0.08);
+  --radius: 18px;
+  --sidebar-w: 256px;
+  --rail-w: 76px;
+
+  /* shell.css 用 */
+  --sb-bg: rgba(255, 255, 255, 0.86);
+  --sb-bg-solid: #ffffff;
+  --sb-hover: var(--sun-soft);
+  --sb-active-bg: var(--violet-soft);
+  --sb-active-ink: var(--violet-ink);
+  --sb-active-icon: var(--violet);
+  --topbar-bg: rgba(251, 250, 255, 0.82);
+  --topbar-line: var(--bridge);
+  --brand-grad: var(--bridge-deep);
+  --danger-soft: var(--coral-soft);
+}
+
+[data-design="v2"] {
+  accent-color: var(--violet);
+}
+
+[data-design="v2"] body {
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Avenir Next", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 180, 0, 0.16) 0%, transparent 32%),
+    radial-gradient(circle at 100% 0%, rgba(123, 92, 255, 0.16) 0%, transparent 36%),
+    radial-gradient(circle at 60% 100%, rgba(255, 111, 97, 0.08) 0%, transparent 40%),
+    var(--surface);
+  background-attachment: fixed;
+}
+
+[data-design="v2"] .design-switch select {
+  background-color: var(--card);
+}
+
+/* ---------- 共通コンポーネント ---------- */
+
+[data-design="v2"] .container {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  padding: 28px 28px 48px;
+  gap: 20px;
+}
+
+[data-design="v2"] .panel {
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  padding: 24px;
+}
+
+[data-design="v2"] h1 {
+  font-size: 26px;
+  letter-spacing: 0.01em;
+}
+
+[data-design="v2"] h2 {
+  font-size: 19px;
+}
+
+[data-design="v2"] a {
+  color: var(--violet-ink);
+}
+
+[data-design="v2"] button {
+  background: var(--violet-ink);
+  border-radius: 12px;
+  padding: 10px 16px;
+  box-shadow: 0 6px 16px rgba(75, 47, 214, 0.22);
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+}
+
+[data-design="v2"] button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+  box-shadow: 0 10px 22px rgba(75, 47, 214, 0.28);
+}
+
+[data-design="v2"] button.ghost {
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+[data-design="v2"] button.ghost:hover:not(:disabled) {
+  background: var(--sun-soft);
+  border-color: #ffe29a;
+  box-shadow: none;
+}
+
+[data-design="v2"] .button-link {
+  background: var(--violet-ink);
+  border-radius: 12px;
+}
+
+[data-design="v2"] input,
+[data-design="v2"] textarea,
+[data-design="v2"] select {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+[data-design="v2"] input:focus,
+[data-design="v2"] textarea:focus,
+[data-design="v2"] select:focus {
+  outline: none;
+  border-color: var(--violet);
+  box-shadow: 0 0 0 4px rgba(123, 92, 255, 0.15);
+}
+
+[data-design="v2"] :focus-visible {
+  outline: 3px solid rgba(123, 92, 255, 0.45);
+  outline-offset: 2px;
+}
+
+[data-design="v2"] .alert {
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-weight: 600;
+}
+
+[data-design="v2"] .alert.success {
+  background: var(--mint-soft);
+  color: var(--mint-ink);
+}
+
+[data-design="v2"] .alert.error {
+  background: #ffecec;
+  color: var(--danger);
+}
+
+[data-design="v2"] th {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+[data-design="v2"] th,
+[data-design="v2"] td {
+  border-bottom-color: var(--border);
+}
+
+[data-design="v2"] tbody tr:hover td {
+  background: #fdfbff;
+}
+
+[data-design="v2"] .row-selected td {
+  background: var(--violet-soft);
+}
+
+[data-design="v2"] .result {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+[data-design="v2"] .token-block,
+[data-design="v2"] .job-item,
+[data-design="v2"] .policy-option {
+  border-radius: 14px;
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+[data-design="v2"] .policy-option:has(input:checked) {
+  background: var(--violet-soft);
+  border-color: #d6ccff;
+}
+
+[data-design="v2"] .status {
+  color: var(--coral);
+}
+
+/* バッジ・チップ */
+[data-design="v2"] .badge-ok {
+  background: var(--mint-soft);
+  color: var(--mint-ink);
+}
+
+[data-design="v2"] .badge-denied_policy {
+  background: var(--sun-soft);
+  color: var(--sun-ink);
+}
+
+[data-design="v2"] .badge-denied_kintone {
+  background: var(--violet-soft);
+  color: var(--violet-ink);
+}
+
+[data-design="v2"] .chip {
+  border-color: var(--border);
+  background: var(--card);
+}
+
+[data-design="v2"] .chip-on {
+  background: var(--mint-soft);
+  border-color: #b5ead7;
+  color: var(--mint-ink);
+}
+
+[data-design="v2"] .chip-access {
+  background: var(--violet-soft);
+  border-color: #d6ccff;
+  color: var(--violet-ink);
+}
+
+[data-design="v2"] .audit-table code,
+[data-design="v2"] .audit-table td:nth-child(2),
+[data-design="v2"] .audit-table td:nth-child(5) {
+  white-space: nowrap;
+}
+
+/* ---------- ダッシュボード ---------- */
+
+/* 現場 → AI → ツール層 → kintone を、色の移り変わりで「つながり」として見せる */
+[data-design="v2"] .arch-flow {
+  gap: 34px;
+}
+
+[data-design="v2"] .arch-node {
+  border-radius: 16px;
+  padding: 16px;
+  border: 1px solid transparent;
+  box-shadow: 0 6px 16px rgba(35, 31, 66, 0.05);
+  transition: transform 160ms ease;
+}
+
+[data-design="v2"] .arch-node:hover {
+  transform: translateY(-3px);
+}
+
+[data-design="v2"] .arch-node:nth-child(1) {
+  background: var(--mint-soft);
+}
+
+[data-design="v2"] .arch-node:nth-child(2) {
+  background: var(--violet-soft);
+}
+
+[data-design="v2"] .arch-node:nth-child(3) {
+  background: var(--coral-soft);
+}
+
+[data-design="v2"] .arch-node-kintone,
+[data-design="v2"] .arch-node:nth-child(4) {
+  background: var(--sun-soft);
+  color: var(--ink);
+  border-color: #ffe29a;
+}
+
+[data-design="v2"] .arch-node-kintone .arch-kicker,
+[data-design="v2"] .arch-node-kintone a {
+  color: var(--sun-ink);
+}
+
+[data-design="v2"] .arch-node:not(:last-child)::after {
+  content: "";
+  right: -30px;
+  width: 26px;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--bridge);
+}
+
+[data-design="v2"] .arch-kicker {
+  color: var(--muted);
+}
+
+[data-design="v2"] .stat {
+  border-radius: var(--radius);
+  border-color: var(--border);
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+[data-design="v2"] .stat::before {
+  content: "";
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: var(--bridge);
+  opacity: 0.1;
+}
+
+[data-design="v2"] .stat-value {
+  font-size: 36px;
+  font-weight: 800;
+  background: var(--bridge-deep);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---------- AIオペレーター ---------- */
+
+[data-design="v2"] .operator-panel {
+  background:
+    linear-gradient(var(--card), var(--card)) padding-box,
+    var(--bridge) border-box;
+  border: 2px solid transparent;
+}
+
+[data-design="v2"] .bubble {
+  border-radius: 18px;
+  border-color: var(--border);
+}
+
+[data-design="v2"] .bubble-user {
+  background: var(--violet-ink);
+  border-color: var(--violet-ink);
+  border-bottom-right-radius: 6px;
+}
+
+[data-design="v2"] .bubble-assistant {
+  background: var(--card);
+  border-bottom-left-radius: 6px;
+  box-shadow: 0 4px 14px rgba(35, 31, 66, 0.05);
+}
+
+[data-design="v2"] .bubble-pending {
+  background: var(--violet-soft);
+  color: var(--violet-ink);
+}
+
+/* AIがkintoneに触れた記録＝kintone側のイエロー */
+[data-design="v2"] .trace {
+  background: var(--sun-soft);
+  border: 1px dashed #f5cf6b;
+  border-radius: 14px;
+}
+
+[data-design="v2"] .trace-title {
+  color: var(--sun-ink);
+}
+
+[data-design="v2"] .trace-no {
+  background: var(--bridge-deep);
+}
+
+[data-design="v2"] .suggestions .ghost {
+  border-radius: 999px;
+  background: var(--card);
+}
+
+[data-design="v2"] .suggestions .ghost:hover:not(:disabled) {
+  background: var(--violet-soft);
+  border-color: #d6ccff;
+}
+
+/* ---------- ログイン画面 ---------- */
+
+[data-design="v2"] .shell-guest .container {
+  padding-top: 48px;
+}
+
+[data-design="v2"] .auth-panel {
+  background:
+    linear-gradient(var(--card), var(--card)) padding-box,
+    var(--bridge) border-box;
+  border: 2px solid transparent;
+}
+
+@media (max-width: 900px) {
+  [data-design="v2"] .arch-node:not(:last-child)::after {
+    right: auto;
+    left: 50%;
+    top: auto;
+    bottom: -20px;
+    width: 4px;
+    height: 16px;
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-design="v2"] * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
