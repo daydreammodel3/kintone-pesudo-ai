@@ -1,6 +1,8 @@
 require("dotenv").config();
 
+const fs = require("fs");
 const path = require("path");
+const https = require("https");
 const crypto = require("crypto");
 const express = require("express");
 const session = require("express-session");
@@ -8,7 +10,7 @@ const SQLiteStoreFactory = require("connect-sqlite3");
 const bcrypt = require("bcryptjs");
 
 const db = require("./db");
-const { port, sessionSecret, geminiModel, anthropicModel, copilotModel } = require("./config");
+const { port, httpsPort, sessionSecret, geminiModel, anthropicModel, copilotModel } = require("./config");
 const { GUEST_LABEL, GUEST_PATHS, isGuest, requireAuth, requireViewer } = require("./auth");
 const { addRecord, searchRecords, normalizeDomain, KintoneApiError } = require("./kintone");
 const { createJob, runJobInBackground, generateKintoneQueryFromInstruction } = require("./analysis");
@@ -37,6 +39,7 @@ const { STATUS_LABELS, recordAiOperation, listAiOperations, countAiOperationsByS
 const { listToolsForApp, toMcpToolList, TOOL_DEFINITIONS, ACCESS_LABELS } = require("./tools/kintoneTools");
 const { runOperator } = require("./operator");
 const { lanAddresses, isInDocker } = require("./network");
+const { CERT_FILE, CA_FILE, loadHttpsCredentials } = require("./tls");
 
 const app = express();
 const SQLiteStore = SQLiteStoreFactory(session);
@@ -745,15 +748,43 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
+// HTTPSで警告を出さないよう、端末に入れてもらう認証局の公開証明書（秘密鍵は含まない）
+app.get("/ca.crt", (_req, res) => {
+  if (!fs.existsSync(CA_FILE)) {
+    return res.status(404).type("text/plain").send("証明書がまだ作られていません。ホスト側で npm run https:cert を実行してください。");
+  }
+  return res.type("application/x-x509-ca-cert").sendFile(CA_FILE);
+});
+
+// コンテナ内ではホストのIPが見えないため、Docker以外のときだけ表示する
+function logLanUrls(scheme, listenPort) {
+  if (isInDocker()) return;
+  lanAddresses().forEach((address) => console.log(`  同じWi-Fiの他端末から: ${scheme}://${address}:${listenPort}`));
+}
+
 if (require.main === module) {
   app.listen(port, () => {
     console.log(`kintone擬似AI app listening on http://localhost:${port}`);
+    logLanUrls("http", port);
     if (isInDocker()) {
       console.log("同じWi-Fiの他端末から開くURLは、ホスト側で `npm run lan-url` を実行すると表示されます。");
-    } else {
-      lanAddresses().forEach((address) => console.log(`  同じWi-Fiの他端末から: http://${address}:${port}`));
     }
   });
+
+  const credentials = loadHttpsCredentials();
+  if (credentials) {
+    const httpsServer = https.createServer(credentials, app).listen(httpsPort, () => {
+      console.log(`kintone擬似AI app listening on https://localhost:${httpsPort}`);
+      logLanUrls("https", httpsPort);
+    });
+    // 当日IPが変わって証明書を作り直しても、再起動せずに新しい証明書へ切り替える
+    fs.watchFile(CERT_FILE, { interval: 3000 }, () => {
+      const renewed = loadHttpsCredentials();
+      if (!renewed) return;
+      httpsServer.setSecureContext(renewed);
+      console.log("HTTPS証明書を読み込み直しました。");
+    });
+  }
 }
 
 module.exports = app;

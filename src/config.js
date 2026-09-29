@@ -17,6 +17,9 @@ function getEncryptionKey() {
 
 module.exports = {
   port: Number(process.env.PORT || 3000),
+  // npm run https:cert で証明書を作ると、このポートでHTTPSも待ち受ける
+  httpsPort: Number(process.env.HTTPS_PORT || 3443),
+  certDir: process.env.CERT_DIR || path.join(process.cwd(), "certs"),
   sessionSecret: process.env.SESSION_SECRET || "replace-session-secret",
   dbPath: process.env.DB_PATH
     || (process.env.VERCEL ? "/tmp/app.db" : path.join(process.cwd(), "data", "app.db")),
