@@ -68,7 +68,7 @@ openssl rand -base64 32
 アプリ本体はDockerで動きますが、URLの表示や証明書の作成はMac側で実行します。
 
 ```bash
-npm install          # npm run lan-url / npm run https:cert を使うため
+npm install          # npm run lan-url / npm run https:cert / npm run mdns-alias を使うため
 brew install mkcert  # HTTPSを使う場合
 mkcert -install      # HTTPSを使う場合。Macのパスワードを求められます
 ```
@@ -92,6 +92,7 @@ HTTPSは、Macの中に作った自分専用の認証局（mkcert）で発行し
 npm run https:cert          # HTTPSを使う場合。前回からIPアドレスが変わっていなければ省略可
 docker compose up -d --build
 npm run lan-url             # 他の端末から開くURLを表示
+npm run mdns-alias          # https://kinpai.local:3443 で開けるようにする（別のターミナルで動かしたままにする）
 ```
 
 表示例:
@@ -100,12 +101,14 @@ npm run lan-url             # 他の端末から開くURLを表示
 同じWi-Fiの他PC・スマートフォンから、次のURLを開いてください:
   http://192.168.1.23:3000
 HTTPS:
+  https://kinpai.local:3443
   https://mysterio.local:3443
   https://192.168.1.23:3443
 ```
 
 - このMacからは <http://localhost:3000>（HTTPSは <https://localhost:3443>）
-- `https://<Macの名前>.local:3443` はIPアドレスが変わっても同じURLで開けます（iPhone・Mac・Windows）。Androidでは開けないことがあるため、IPアドレスのURLを使ってください
+- `https://kinpai.local:3443` は、Macの名前とは別に `npm run mdns-alias` で公開する別名です。動かしている間だけ開けて、止める（Ctrl+C）と消えます。別名は `.env` の `MDNS_ALIAS` で変えられます
+- `https://kinpai.local:3443`・`https://<Macの名前>.local:3443` はIPアドレスが変わっても同じURLで開けます（iPhone・Mac・Windows）。Androidでは開けないことがあるため、IPアドレスのURLを使ってください
 - 起動できたかは `docker compose logs -f` で確認できます（`listening on https://…` が出ていればHTTPSも有効）
 - HTTPS（3443）は、起動したときに証明書があれば有効になります。起動したあとで、はじめて `npm run https:cert` を実行したときだけ、`docker compose restart` で起動し直してください
 
@@ -131,13 +134,15 @@ npm run lan-url      # 新しいURLを確認して、参加者に伝える
 
 - アプリの再起動は不要です。作り直した証明書は、起動中のサーバーが数秒で自動的に読み込みます（`docker compose logs` に「HTTPS証明書を読み込み直しました。」と出ます）
 - 端末側の認証局の入れ直しは不要です
-- `https://<Macの名前>.local:3443` を使っている端末は、URLも変わりません
+- `npm run mdns-alias` は新しいIPアドレスで自動的に公開し直します（起動し直しは不要）
+- `https://kinpai.local:3443`・`https://<Macの名前>.local:3443` を使っている端末は、URLも変わりません
 
 ### 2-4. つながらないとき
 
 - URLが `https://…:3000` になっていないか（3000はHTTP専用。HTTPSは3443）。ブラウザが自動で `https://` を補うことがあるので、`http://` から入力してください
 - 他の端末が同じWi-Fiにつながっているか。ゲスト用Wi-Fiや公衆Wi-Fi、社内Wi-Fiなど、端末どうしの通信を禁止しているWi-Fiではつながりません。テザリングなど別のネットワークを使ってください
 - macOSのファイアウォール（システム設定 → ネットワーク → ファイアウォール）で、Docker（`npm run dev` なら node）への着信が許可されているか
+- `kinpai.local` で開けない: `npm run mdns-alias` を動かしたままにしているか。HTTPSで警告が出る場合は、別名を追加する前に作った証明書かもしれないので `npm run https:cert` で作り直す
 - HTTPSで警告が出る: その端末に認証局が入っていない（[1-3](#1-3-開く端末に認証局を入れるhttpsを使う場合端末ごとに1回だけ)）か、IPアドレスが変わったのに証明書を作り直していない（[2-3](#2-3-ipアドレスが変わるたびにやること)）
 
 HTTP（3000）の通信は暗号化されません。信頼できるWi-Fiで使うか、HTTPS（3443）を使ってください。認証局の秘密鍵（`mkcert -CAROOT` の場所にある `rootCA-key.pem`）はMacから外に出さないでください。アプリが配るのは公開証明書（`ca.crt`）だけです。
@@ -194,6 +199,7 @@ AIオペレーター、1件登録、分析の実行、アプリ管理、トー�
 | `AI_MAX_TOOL_STEPS` | `8` | 1回の依頼で呼べるツールの最大回数 |
 | `PORT` | `3000` | HTTPのポート |
 | `HTTPS_PORT` | `3443` | HTTPSのポート（`npm run https:cert` で証明書を作ったときだけ有効） |
+| `MDNS_ALIAS` | `kinpai` | `npm run mdns-alias` で公開する別名（`<別名>.local`）。証明書にも入る。空にすると使わない |
 
 ## 6. 今後: MCPサーバー化
 

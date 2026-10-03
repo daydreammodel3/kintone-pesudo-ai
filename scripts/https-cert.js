@@ -7,7 +7,7 @@ const path = require("path");
 const { execFileSync } = require("child_process");
 const { certDir, httpsPort } = require("../src/config");
 const { CERT_FILE, KEY_FILE, CA_FILE } = require("../src/tls");
-const { lanAddresses, localHostName } = require("../src/network");
+const { lanAddresses, localHostNames } = require("../src/network");
 
 function mkcert(args, options = {}) {
   return execFileSync("mkcert", args, { encoding: "utf8", ...options });
@@ -28,9 +28,9 @@ if (!fs.existsSync(path.join(caRoot, "rootCA.pem"))) {
   process.exit(1);
 }
 
-const hostName = localHostName();
+const hostNames = localHostNames();
 const addresses = lanAddresses();
-const names = ["localhost", "127.0.0.1", hostName, ...addresses];
+const names = ["localhost", "127.0.0.1", ...hostNames, ...addresses];
 
 fs.mkdirSync(certDir, { recursive: true });
 mkcert(["-cert-file", CERT_FILE, "-key-file", KEY_FILE, ...names], { stdio: "inherit" });
@@ -40,7 +40,7 @@ fs.copyFileSync(path.join(caRoot, "rootCA.pem"), CA_FILE);
 console.log("");
 console.log("HTTPSの証明書を作りました。起動中のサーバーは数秒で自動的に読み込み直します。");
 console.log("同じWi-Fiの端末から次のURLで開けます:");
-[hostName, ...addresses].forEach((name) => console.log(`  https://${name}:${httpsPort}`));
+[...hostNames, ...addresses].forEach((name) => console.log(`  https://${name}:${httpsPort}`));
 console.log("");
 console.log("はじめて開く端末では、先に認証局を入れてください（READMEの手順を参照）:");
-console.log(`  http://${addresses[0] || hostName}:${process.env.PORT || 3000}/ca.crt`);
+console.log(`  http://${addresses[0] || hostNames[0]}:${process.env.PORT || 3000}/ca.crt`);

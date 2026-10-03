@@ -1,6 +1,7 @@
 const fs = require("fs");
 const os = require("os");
 const { execFileSync } = require("child_process");
+const { mdnsAlias } = require("./config");
 
 // 同じWi-Fi（LAN）の他端末からアクセスできるIPv4アドレスの一覧
 function lanAddresses() {
@@ -29,4 +30,14 @@ function localHostName() {
   return `${name.toLowerCase()}.local`;
 }
 
-module.exports = { lanAddresses, isInDocker, localHostName };
+// Macの名前とは別に、npm run mdns-alias で公開する「<別名>.local」（未設定なら null）
+function aliasHostName() {
+  return mdnsAlias ? `${mdnsAlias.toLowerCase()}.local` : null;
+}
+
+// HTTPSで案内する名前（別名 → Macの名前 の順）
+function localHostNames() {
+  return [aliasHostName(), localHostName()].filter(Boolean);
+}
+
+module.exports = { lanAddresses, isInDocker, localHostName, aliasHostName, localHostNames };

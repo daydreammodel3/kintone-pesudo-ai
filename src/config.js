@@ -20,6 +20,8 @@ module.exports = {
   // npm run https:cert で証明書を作ると、このポートでHTTPSも待ち受ける
   httpsPort: Number(process.env.HTTPS_PORT || 3443),
   certDir: process.env.CERT_DIR || path.join(process.cwd(), "certs"),
+  // npm run mdns-alias で公開する別名（<別名>.local）。空なら使わない
+  mdnsAlias: process.env.MDNS_ALIAS ?? "kinpai",
   sessionSecret: process.env.SESSION_SECRET || "replace-session-secret",
   dbPath: process.env.DB_PATH
     || (process.env.VERCEL ? "/tmp/app.db" : path.join(process.cwd(), "data", "app.db")),
