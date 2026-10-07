@@ -15,7 +15,11 @@
       ["/tokens", "トークン・AI設定", "M15 13a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12.2 11.8L4 20M7 17l2 2M5 19l2 2", "t"]
     ]}
   ];
-  const navItems = navGroups.flatMap((g) => g.items);
+  // ゲストには閲覧を許可した画面だけを出す（v3 のコマンドパレット・ショートカットも同じ一覧から作る）
+  const visibleGroups = isGuest
+    ? navGroups.map((g) => ({ ...g, items: g.items.filter(([href]) => guestPaths.includes(href)) })).filter((g) => g.items.length)
+    : navGroups;
+  const navItems = visibleGroups.flatMap((g) => g.items);
   const useShell = design !== 'v1';
   const isV3 = design === 'v3';
 %>
@@ -62,7 +66,7 @@
         </a>
 
         <nav class="sb-nav">
-          <% navGroups.forEach((group) => { %>
+          <% visibleGroups.forEach((group) => { %>
             <p class="sb-group"><%= group.label %></p>
             <% group.items.forEach(([href, label, icon, key]) => { const active = currentPath === href; %>
               <a href="<%= href %>" class="sb-link<%= active ? ' active' : '' %>" <%- active ? 'aria-current="page"' : '' %> title="<%= label %>">
@@ -171,6 +175,9 @@
 <% } %>
     <% if (error) { %>
       <p class="alert error"><%= error %></p>
+    <% } %>
+    <% if (isGuest) { %>
+      <p class="alert guest-note">ゲスト（閲覧のみ）でログインしています。全ユーザーの操作状況と分析結果を閲覧できます。設定の変更やAIの実行はできません。</p>
     <% } %>
     <% if (message) { %>
       <p class="alert success"><%= message %></p>

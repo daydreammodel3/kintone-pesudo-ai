@@ -12,6 +12,13 @@
     <button type="submit">ログイン</button>
   </form>
   <p class="hint">未登録の場合は <a href="/register">新規登録</a></p>
+
+  <div class="guest-login">
+    <form method="post" action="/auth/guest">
+      <button type="submit" class="ghost">ゲストとしてログイン（閲覧のみ）</button>
+    </form>
+    <p class="hint">プレゼン用。パスワードなしで、全ユーザーの操作状況と分析結果を閲覧できます。</p>
+  </div>
 </section>
 
 <%- include('partials/footer') %>

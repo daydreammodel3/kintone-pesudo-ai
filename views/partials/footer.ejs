@@ -6,6 +6,17 @@
   <% if (design === 'v3') { %><script src="/static/js/ops.js"></script><% } %>
 <% } else { %>
   </main>
+  <script>
+    // スマホでナビが横スクロールになるとき、表示中の画面のリンクを見える位置に寄せる
+    (function () {
+      var nav = document.querySelector(".site-header nav");
+      var active = nav && nav.querySelector("a.active");
+      if (active && nav.scrollWidth > nav.clientWidth) {
+        var offset = active.getBoundingClientRect().left - nav.getBoundingClientRect().left;
+        nav.scrollLeft += offset - (nav.clientWidth - active.offsetWidth) / 2;
+      }
+    })();
+  </script>
 <% } %>
 </body>
 </html>

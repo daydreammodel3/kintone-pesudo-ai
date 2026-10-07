@@ -1,6 +1,8 @@
 require("dotenv").config();
 
+const fs = require("fs");
 const path = require("path");
+const https = require("https");
 const crypto = require("crypto");
 const express = require("express");
 const session = require("express-session");
@@ -8,8 +10,8 @@ const SQLiteStoreFactory = require("connect-sqlite3");
 const bcrypt = require("bcryptjs");
 
 const db = require("./db");
-const { port, sessionSecret, geminiModel, anthropicModel, copilotModel } = require("./config");
-const { requireAuth } = require("./auth");
+const { port, httpsPort, sessionSecret, geminiModel, anthropicModel, copilotModel } = require("./config");
+const { GUEST_LABEL, GUEST_PATHS, isGuest, requireAuth, requireViewer } = require("./auth");
 const { addRecord, searchRecords, normalizeDomain, KintoneApiError } = require("./kintone");
 const { createJob, runJobInBackground, generateKintoneQueryFromInstruction } = require("./analysis");
 const { POST_GET_FIELD_TYPES, FIELD_TYPE_CODES } = require("./fieldTypes");
@@ -36,6 +38,8 @@ const { parseFieldInputValue } = require("./recordValues");
 const { STATUS_LABELS, recordAiOperation, listAiOperations, countAiOperationsByStatus } = require("./aiLog");
 const { listToolsForApp, toMcpToolList, TOOL_DEFINITIONS, ACCESS_LABELS } = require("./tools/kintoneTools");
 const { runOperator } = require("./operator");
+const { lanAddresses, isInDocker } = require("./network");
+const { CERT_FILE, CA_FILE, loadHttpsCredentials } = require("./tls");
 
 const app = express();
 const SQLiteStore = SQLiteStoreFactory(session);
@@ -95,6 +99,8 @@ app.use((req, res, next) => {
   res.locals.designs = DESIGNS;
   res.locals.currentUrl = req.originalUrl;
   res.locals.currentUser = req.session.username || null;
+  res.locals.isGuest = isGuest(req);
+  res.locals.guestPaths = GUEST_PATHS;
   res.locals.currentPath = req.path;
   res.locals.error = req.session.flashError || null;
   res.locals.message = req.session.flashMessage || null;
@@ -169,17 +175,17 @@ app.use((req, res, next) => {
 });
 
 app.get("/", (req, res) => {
-  if (req.session.userId) return res.redirect("/dashboard");
+  if (req.session.userId || isGuest(req)) return res.redirect("/dashboard");
   return res.redirect("/login");
 });
 
 app.get("/login", (req, res) => {
-  if (req.session.userId) return res.redirect("/dashboard");
+  if (req.session.userId || isGuest(req)) return res.redirect("/dashboard");
   return res.render("login", { title: "ログイン" });
 });
 
 app.get("/register", (req, res) => {
-  if (req.session.userId) return res.redirect("/dashboard");
+  if (req.session.userId || isGuest(req)) return res.redirect("/dashboard");
   return res.render("register", { title: "ユーザー登録" });
 });
 
@@ -228,24 +234,47 @@ app.post("/auth/login", async (req, res) => {
   return res.redirect("/dashboard");
 });
 
-app.post("/auth/logout", requireAuth, (req, res) => {
+// プレゼン用: パスワードなしで閲覧専用のゲストとしてログイン
+app.post("/auth/guest", (req, res) => {
+  delete req.session.userId;
+  req.session.role = "guest";
+  req.session.username = GUEST_LABEL;
+  return res.redirect("/dashboard");
+});
+
+app.post("/auth/logout", requireViewer, (req, res) => {
   req.session.destroy(() => {
     res.redirect("/login");
   });
 });
 
-app.get("/dashboard", requireAuth, (req, res) => {
-  const userId = req.session.userId;
-  const jobs = db
-    .prepare("SELECT id, status, created_at, updated_at FROM analysis_jobs WHERE user_id = ? ORDER BY id DESC LIMIT 5")
-    .all(userId);
+// 分析ジョブ一覧。userId が null のときは全ユーザー分（ゲストの閲覧用）
+function listAnalysisJobs(userId, limit) {
+  return db
+    .prepare(`
+      SELECT j.id, j.status, j.created_at, j.updated_at, j.error, u.username
+      FROM analysis_jobs j LEFT JOIN users u ON u.id = j.user_id
+      WHERE (? IS NULL OR j.user_id = ?) ORDER BY j.id DESC LIMIT ?
+    `)
+    .all(userId, userId, limit);
+}
+
+app.get("/dashboard", requireViewer, (req, res) => {
+  // ゲストはマネージャー視点で全ユーザー分を見る
+  const userId = isGuest(req) ? null : req.session.userId;
+  const jobs = listAnalysisJobs(userId, 5);
 
   const apps = getManagedApps();
   const fieldCount = db.prepare("SELECT COUNT(*) AS count FROM managed_kintone_app_fields WHERE source = 'kintone'").get().count;
   const opCounts = countAiOperationsByStatus(userId);
   const recentOps = listAiOperations({ userId, limit: 5 });
-  const llmSettings = getUserLlmSettings(userId);
-  const providerLabel = LLM_PROVIDERS.find((p) => p.code === llmSettings.provider)?.label || llmSettings.provider;
+  let providerLabel;
+  if (userId) {
+    const llmSettings = getUserLlmSettings(userId);
+    providerLabel = LLM_PROVIDERS.find((p) => p.code === llmSettings.provider)?.label || llmSettings.provider;
+  } else {
+    providerLabel = LLM_PROVIDERS.filter((p) => !p.retired).map((p) => p.label.replace(/（.*）/, "")).join(" / ");
+  }
 
   return res.render("dashboard", {
     title: "ダッシュボード",
@@ -523,10 +552,11 @@ app.post("/records", requireAuth, async (req, res) => {
   return res.redirect(`/records/new?appId=${managedAppId}`);
 });
 
-app.get("/records/analyze", requireAuth, (req, res) => {
-  const jobs = db
-    .prepare("SELECT id, status, created_at, updated_at, error FROM analysis_jobs WHERE user_id = ? ORDER BY id DESC LIMIT 20")
-    .all(req.session.userId);
+app.get("/records/analyze", requireViewer, (req, res) => {
+  if (isGuest(req)) {
+    return res.render("analyze", { title: "分析結果", jobs: listAnalysisJobs(null, 20), apps: [], selectedApp: null, getFields: [] });
+  }
+  const jobs = listAnalysisJobs(req.session.userId, 20);
 
   const apps = getManagedApps();
   const selectedApp = selectApp(apps, req.query.appId);
@@ -610,11 +640,12 @@ app.post("/analysis/start", requireAuth, async (req, res) => {
   return res.redirect("/records/analyze");
 });
 
-app.get("/analysis/jobs/:jobId", requireAuth, (req, res) => {
+app.get("/analysis/jobs/:jobId", requireViewer, (req, res) => {
   const jobId = Number(req.params.jobId);
+  const userId = isGuest(req) ? null : req.session.userId;
   const job = db
-    .prepare("SELECT * FROM analysis_jobs WHERE id = ? AND user_id = ?")
-    .get(jobId, req.session.userId);
+    .prepare("SELECT * FROM analysis_jobs WHERE id = ? AND (? IS NULL OR user_id = ?)")
+    .get(jobId, userId, userId);
 
   if (!job) {
     return res.status(404).json({ error: "not_found" });
@@ -717,10 +748,43 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
+// HTTPSで警告を出さないよう、端末に入れてもらう認証局の公開証明書（秘密鍵は含まない）
+app.get("/ca.crt", (_req, res) => {
+  if (!fs.existsSync(CA_FILE)) {
+    return res.status(404).type("text/plain").send("証明書がまだ作られていません。ホスト側で npm run https:cert を実行してください。");
+  }
+  return res.type("application/x-x509-ca-cert").sendFile(CA_FILE);
+});
+
+// コンテナ内ではホストのIPが見えないため、Docker以外のときだけ表示する
+function logLanUrls(scheme, listenPort) {
+  if (isInDocker()) return;
+  lanAddresses().forEach((address) => console.log(`  同じWi-Fiの他端末から: ${scheme}://${address}:${listenPort}`));
+}
+
 if (require.main === module) {
   app.listen(port, () => {
     console.log(`kintone擬似AI app listening on http://localhost:${port}`);
+    logLanUrls("http", port);
+    if (isInDocker()) {
+      console.log("同じWi-Fiの他端末から開くURLは、ホスト側で `npm run lan-url` を実行すると表示されます。");
+    }
   });
+
+  const credentials = loadHttpsCredentials();
+  if (credentials) {
+    const httpsServer = https.createServer(credentials, app).listen(httpsPort, () => {
+      console.log(`kintone擬似AI app listening on https://localhost:${httpsPort}`);
+      logLanUrls("https", httpsPort);
+    });
+    // 当日IPが変わって証明書を作り直しても、再起動せずに新しい証明書へ切り替える
+    fs.watchFile(CERT_FILE, { interval: 3000 }, () => {
+      const renewed = loadHttpsCredentials();
+      if (!renewed) return;
+      httpsServer.setSecureContext(renewed);
+      console.log("HTTPS証明書を読み込み直しました。");
+    });
+  }
 }
 
 module.exports = app;

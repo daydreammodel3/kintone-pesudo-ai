@@ -8,22 +8,22 @@
     <li class="arch-node">
       <span class="arch-kicker">現場 / FDE</span>
       <strong>自然言語で依頼</strong>
-      <a href="/operator">AIオペレーター →</a>
+      <% if (!isGuest) { %><a href="/operator">AIオペレーター →</a><% } %>
     </li>
     <li class="arch-node">
       <span class="arch-kicker">生成AI</span>
       <strong><%= providerLabel %></strong>
-      <a href="/tokens">AI設定 →</a>
+      <% if (!isGuest) { %><a href="/tokens">AI設定 →</a><% } %>
     </li>
     <li class="arch-node">
       <span class="arch-kicker">ツール層（MCP相当）</span>
       <strong>ポリシーで公開範囲を制御</strong>
-      <a href="/apps/manage">AI操作ポリシー →</a>
+      <% if (!isGuest) { %><a href="/apps/manage">AI操作ポリシー →</a><% } %>
     </li>
     <li class="arch-node arch-node-kintone">
       <span class="arch-kicker">kintone</span>
       <strong>データ・権限・監査</strong>
-      <a href="/audit">AI操作ログ →</a>
+      <% if (!isGuest) { %><a href="/audit">AI操作ログ →</a><% } %>
     </li>
   </ol>
 </section>
@@ -50,15 +50,16 @@
 <section class="panel">
   <h2>最近のAI操作</h2>
   <% if (!recentOps.length) { %>
-    <p class="hint">まだAI操作はありません。<a href="/operator">AIオペレーター</a>から依頼してみてください。</p>
+    <p class="hint">まだAI操作はありません。<% if (!isGuest) { %><a href="/operator">AIオペレーター</a>から依頼してみてください。<% } %></p>
   <% } else { %>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>日時(UTC)</th><th>アプリ</th><th>ツール</th><th>結果</th><th>内容</th></tr></thead>
+        <thead><tr><th>日時(UTC)</th><% if (isGuest) { %><th>ユーザー</th><% } %><th>アプリ</th><th>ツール</th><th>結果</th><th>内容</th></tr></thead>
         <tbody>
           <% recentOps.forEach((op) => { %>
             <tr>
               <td class="nowrap"><%= op.created_at %></td>
+              <% if (isGuest) { %><td><%= op.username %></td><% } %>
               <td><%= op.app_name %></td>
               <td><code><%= op.tool_name %></code></td>
               <td><span class="badge badge-<%= op.status %>"><%= statusLabels[op.status] || op.status %></span></td>
@@ -68,7 +69,7 @@
         </tbody>
       </table>
     </div>
-    <p><a href="/audit">すべての操作ログを見る →</a></p>
+    <% if (!isGuest) { %><p><a href="/audit">すべての操作ログを見る →</a></p><% } %>
   <% } %>
 </section>
 
@@ -79,11 +80,12 @@
   <% } else { %>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>ID</th><th>状態</th><th>作成</th><th>更新</th></tr></thead>
+        <thead><tr><th>ID</th><% if (isGuest) { %><th>ユーザー</th><% } %><th>状態</th><th>作成</th><th>更新</th></tr></thead>
         <tbody>
           <% jobs.forEach((job) => { %>
             <tr>
               <td><%= job.id %></td>
+              <% if (isGuest) { %><td><%= job.username %></td><% } %>
               <td><%= job.status %></td>
               <td><%= job.created_at %></td>
               <td><%= job.updated_at %></td>
@@ -92,6 +94,7 @@
         </tbody>
       </table>
     </div>
+    <p><a href="/records/analyze">分析結果を見る →</a></p>
   <% } %>
 </section>
 
